@@ -1,0 +1,28 @@
+# Math channels — values computed from other channels, published as `math.<name>` (see the
+# `mathChannels` entry in the cfg/main.yml header). Names carry the car (or car class) whose
+# constants they encode; point the car-agnostic aliases in channelAliases.yml at them.
+#
+# Use one when a value combines several channels or must hold through a gate. A unit conversion of a
+# single raw channel stays an `=` entry in its alias row (channelAliases.yml) — math channel inputs read
+# through aliases, so they see those conversions already applied.
+#
+#   percent:  channel                      → numerator
+#   of:       channel | [channel, …]       → summed denominator (`=120` constants allowed)
+#   onlyWhen: { channel, atLeast }         → optional gate; below it the last value holds
+# Result: percent / sum(of) × 100. Not written while any input is missing or below 0 (a sensor out of
+# range, e.g. unplugged), or the sum is 0. Inputs may be aliases or channels, never another math channel.
+# Inputs are the per-circuit pressure aliases: brake pressure sensors on the analog-to-CAN module.
+
+# Brake pedal effort as % of 120 bar front line pressure (the Praga's full pressure).
+singleSeaterBrakePct:
+  percent: brakePressureFront
+  of: "=120"
+
+# Active brake bias: front pressure as % of front + rear. Both inputs arrive in one CAN frame (the analog
+# module's channels 4–7 frame), so they are always paired. Below 10 bar front
+# the ratio is noise (pads barely touching, rear lagging the front on pressure build), so the last
+# value under real braking is held.
+singleSeaterBrakeBiasPct:
+  percent: brakePressureFront
+  of: [brakePressureFront, brakePressureRear]
+  onlyWhen: { channel: brakePressureFront, atLeast: 10 }

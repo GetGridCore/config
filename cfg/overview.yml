@@ -1,0 +1,121 @@
+# Overview page (phone landscape primary, portrait secondary). Included from main.yml.
+# Row 1 is a leading `auto` row that collapses to nothing until needed: the warning banner (see
+# cfg/warnings.yml). Row 2 is the overview body: `overviewLayout` places the RPM bar, the TPMS tiles,
+# the G meter, lap delta + lap table and the bottom data strip from the user's choices — the top-level
+# `overview:` block in main.yml (Settings page → OVERVIEW). This file only holds each part's widget params.
+id: overview
+contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full w-full min-h-0 min-w-0 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-[clamp(8px,1.6vw,18px)] phone-landscape:gap-1.5 max-lg:portrait:gap-1"
+widgets:
+  - !include warnings.yml
+  - id: ov-body
+    widget: overviewLayout
+    gridClass: "col-start-1 row-start-2 h-full min-h-0 min-w-0"
+    params:
+      # RPM bar (Settings → OVERVIEW → RPM bar): rpmAndMaps params — shift lights + MAP/TC/ABS pills
+      # (Dashboard 7E). Its presence gate keeps it empty (and its row gone) unless SimHub is streaming.
+      rpmBar: {}
+      # TPMS tiles LF, RF, LR, RR (2x2). Their pressure/temperature channels also decide
+      # "show TPMS: when available".
+      tires:
+      - corner: LF
+        # Temporary: ALS 3-ch IR on FL (alsTireBle mapping FL→94DFA5). Falls back to single-channel alias when offline.
+        multiTempChannelPrefix: alsTireBle.fl
+        multiTempChannelCount: 3
+        tempChannel: tpmsTemperatureLF
+        pressureChannel: tpmsPressureLF
+        batteryChannel: chineseBLETPMS.LF.batteryPct
+        batteryUnit: "%"
+        # Race tires (Michelin slick / cup) — surface temp band centered at 80 ±10 °C.
+        optimalTemp: 80
+        optimalTempRange: 20
+        # TPMS_McLaren_450 pTire* physical max (bar) — saturated reading → "waiting"
+        sentinelPressure: 6.375
+        pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+      - corner: RF
+        # Mirror right tiles so color patches sit on the car's outer edges.
+        flip: true
+        tempChannel: tpmsTemperatureRF
+        pressureChannel: tpmsPressureRF
+        batteryChannel: chineseBLETPMS.RF.batteryPct
+        batteryUnit: "%"
+        optimalTemp: 80
+        optimalTempRange: 20
+        sentinelPressure: 6.375
+        pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+      - corner: LR
+        tempChannel: tpmsTemperatureLR
+        pressureChannel: tpmsPressureLR
+        batteryChannel: chineseBLETPMS.LR.batteryPct
+        batteryUnit: "%"
+        optimalTemp: 80
+        optimalTempRange: 20
+        sentinelPressure: 6.375
+        pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+      - corner: RR
+        flip: true
+        tempChannel: tpmsTemperatureRR
+        pressureChannel: tpmsPressureRR
+        batteryChannel: chineseBLETPMS.RR.batteryPct
+        batteryUnit: "%"
+        optimalTemp: 80
+        optimalTempRange: 20
+        sentinelPressure: 6.375
+        pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+      # G meter (Settings → OVERVIEW → G meter): gMeterWithInputs params.
+      gMeter:
+        title: G Meter
+        latChannel: accelLat
+        longChannel: accelLong
+        clampG: 5
+        showMaxEnvelope: true
+      # Big lap delta — dominant value over a center-anchored scale bar that slides with the live delta.
+      # Green when faster, red when slower (lapDeltaBar colors value + fill from the delta sign).
+      # Stopped state (amber "STOPPED" sign, plus what is uploading) shows whenever the car stands —
+      # from system.motion.stopped; see widget defaults for `stoppedMode`.
+      delta:
+        title: "Δ Lap Delta"
+        # Names the lap the delta runs against (Settings → "Lap delta against"); the plain title while
+        # there is none (no timed lap yet, or a lap joined mid-way, which runs on a virtual pace).
+        titleChannel: system.LapTimer.deltaReference
+        titleMap: { optimal: "Δ Delta to optimal", best: "Δ Delta to best" }
+        channel: system.LapTimer.deltaEstim
+        decimals: 3
+        unit: s
+        # Scale bar spans ±range seconds around center; delta clamps to the edges.
+        range: 1.5
+      # Lap timing — vertical table: optimal / best / last / rolling (running lap emphasized).
+      laps:
+        rows:
+          - label: Optimal
+            channel: system.LapTimer.refOptimalS
+            labelSuffixChannel: system.LapTimer.refWindow
+            labelSuffixMap: { daily: " (day)", weekly: " (week)", allTime: " (all)" }
+            format: lapTime
+            lapTimeEmptyIfZero: true
+            decimals: 3
+            color: "#86efac"
+          - label: Best
+            channel: system.LapTimer.refBestS
+            labelSuffixChannel: system.LapTimer.refWindow
+            labelSuffixMap: { daily: " (day)", weekly: " (week)", allTime: " (all)" }
+            format: lapTime
+            lapTimeEmptyIfZero: true
+            decimals: 3
+            color: "#c084fc"
+          - label: Last
+            channel: system.LapTimer.lastLapS
+            format: lapTime
+            lapTimeEmptyIfZero: true
+            decimals: 3
+            color: "#67e8f9"
+          - label: Current lap
+            channel: system.LapTimer.rollingLapTimeS
+            format: lapTime
+            decimals: 3
+            emphasis: big
+            color: "#67e8f9"
+            suffixChannel: system.LapTimer.lapCount
+            suffixOffset: 1
+      # Bottom strip: textDataStripGrid params shared by every cell. The cells themselves are the
+      # Settings page's "Visible channels" (`overview.channels`), first ones with data, up to 6.
+      strip: {}

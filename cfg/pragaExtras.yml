@@ -1,0 +1,29 @@
+# Extra Praga CAN readouts (pressures / boost control) — separate page; `/pragaExtras`. CONFIG=praga only.
+id: pragaExtras
+contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-1 gap-3 max-md:col-span-1"
+widgets:
+  - id: praga-extras-grid
+    widget: miniMetricsGrid
+    gridClass: "col-start-1 row-start-1 min-h-0 min-w-0"
+    params:
+      items:
+        - title: Oil pressure
+          channel: praga.Pressure_296.oilPressureBar
+          unit: bar
+          decimals: 1
+          icon: engineOil
+        - title: Shift pressure
+          channel: praga.ShiftPress_312.systemPressureBar
+          unit: bar
+          decimals: 1
+          icon: clutchOil
+        - title: WG duty
+          channel: praga.FuelIgnWG_344.wgDutyPct
+          unit: "%"
+          decimals: 0
+          icon: airCharge
+        - title: Fuel rail
+          channel: praga.Pressure_296.fuelPressureBar
+          unit: bar
+          decimals: 1
+          icon: thermo

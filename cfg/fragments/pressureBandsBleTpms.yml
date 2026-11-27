@@ -1,0 +1,6 @@
+# Michelin-style bar bands for BLE `simpleTire` (chineseBLETPMS). Use: `pressureBands: !include fragments/pressureBandsBleTpms.yml`
+- { min: 2.1, max: 2.7, color: "#22c55e" }
+- { min: 1.8, max: 2.1, color: "#4a9eff" }
+- { min: 2.7, max: 3.0, color: "#4a9eff" }
+- { max: 1.8, color: "#ef4444" }
+- { min: 3.0, color: "#ef4444" }

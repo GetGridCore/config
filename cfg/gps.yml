@@ -1,0 +1,158 @@
+# GPS / lap-timing diagnostics: fix quality, lap data, inputs, G meter.
+# Included from main.yml via `!include gps.yml`.
+#
+# Landscape: 12 cols x 4 equal rows.
+#   Left half (cols 1-6) = data readouts, 3 per row: fix status, then distances + rolling lap,
+#   then delta/best/last on one line, then reference best/optimal on the last row.
+#   Right half (cols 7-12) = driver inputs (one row tall, same height as a text row) over the G meter
+#   (the remaining three rows, so the G meter is the dominant instrument). Inputs use `fillHeight` so
+#   the trace + pedal bars fill that single row instead of sitting in a short capped strip.
+# Portrait: collapse to a single 6-col stack (auto-rows-min) in the same top->bottom order, with inputs
+#   and the G meter full-width at the bottom.
+id: gps
+# Disabled internally, it's mostly debugging data which we should have in debug
+onlyIfChannel: DISABLED
+contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-12 grid-rows-[repeat(4,minmax(0,1fr))] gap-[clamp(10px,min(2.2vw,2.8vmin),28px)] phone-landscape:gap-1 phone-landscape:gap-y-0.5 max-md:portrait:grid-cols-6 max-md:portrait:grid-rows-none max-md:portrait:gap-2 max-md:portrait:auto-rows-min"
+widgets:
+  # ===== Left half: data readouts (3 per row) =====
+  # Row 1 — fix / status
+  - id: gps-lap-count
+    widget: textData
+    gridClass: "col-start-1 col-span-2 row-start-1 min-h-0 min-w-0 max-md:portrait:col-start-1 max-md:portrait:col-span-2 max-md:portrait:row-start-1"
+    params:
+      title: Laps
+      channel: system.LapTimer.lapCount
+      decimals: 0
+      labelPosition: bottom
+  - id: gps-speed
+    widget: textData
+    gridClass: "col-start-3 col-span-2 row-start-1 min-h-0 min-w-0 max-md:portrait:col-start-3 max-md:portrait:col-span-2 max-md:portrait:row-start-1"
+    params:
+      title: GPS Speed
+      channel: gpsSpeedKph
+      recencyChannel: gpsSpeedKph
+      recencyThresholdS: 3
+      unit: km/h
+      decimals: 1
+      labelPosition: bottom
+  - id: gps-horiz-accuracy
+    widget: textData
+    gridClass: "col-start-5 col-span-2 row-start-1 min-h-0 min-w-0 max-md:portrait:col-start-5 max-md:portrait:col-span-2 max-md:portrait:row-start-1"
+    params:
+      title: GPS Accuracy
+      channel: gpsHorizontalAccuracyM
+      recencyChannel: gpsHorizontalAccuracyM
+      recencyThresholdS: 3
+      unit: m
+      decimals: 1
+      labelPosition: bottom
+  # Row 2 — distances + live rolling lap
+  - id: gps-distance-snapped
+    widget: textData
+    gridClass: "col-start-1 col-span-2 row-start-2 min-h-0 min-w-0 max-md:portrait:col-start-1 max-md:portrait:col-span-2 max-md:portrait:row-start-2"
+    params:
+      title: Distance Snapped
+      channel: system.LapTimer.distanceSnapped
+      unit: m
+      decimals: 1
+      labelPosition: bottom
+  - id: gps-last-distance-to-snap
+    widget: textData
+    gridClass: "col-start-3 col-span-2 row-start-2 min-h-0 min-w-0 max-md:portrait:col-start-3 max-md:portrait:col-span-2 max-md:portrait:row-start-2"
+    params:
+      title: Last Distance To Snap
+      channel: system.LapTimer.lastDistanceToSnap
+      unit: m
+      decimals: 2
+      labelPosition: bottom
+  - id: gps-rolling-lap
+    widget: textData
+    gridClass: "col-start-5 col-span-2 row-start-2 min-h-0 min-w-0 max-md:portrait:col-start-5 max-md:portrait:col-span-2 max-md:portrait:row-start-2"
+    params:
+      title: Rolling lap time
+      channel: system.LapTimer.rollingLapTimeS
+      format: lapTime
+      unit: ""
+      decimals: 3
+      labelPosition: bottom
+  # Row 3 — delta / best / last on one line
+  - id: gps-delta-estim
+    widget: textDataLapDelta
+    gridClass: "col-start-1 col-span-2 row-start-3 min-h-0 min-w-0 max-md:portrait:col-start-1 max-md:portrait:col-span-2 max-md:portrait:row-start-3"
+    params:
+      title: Delta Estim
+      channel: system.LapTimer.deltaEstim
+      unit: s
+      decimals: 3
+      format: signedDelta
+      labelPosition: bottom
+  - id: gps-best-lap
+    widget: textData
+    gridClass: "col-start-3 col-span-2 row-start-3 min-h-0 min-w-0 max-md:portrait:col-start-3 max-md:portrait:col-span-2 max-md:portrait:row-start-3"
+    params:
+      title: Best lap
+      channel: system.LapTimer.bestLapS
+      format: lapTime
+      lapTimeEmptyIfZero: true
+      unit: ""
+      decimals: 3
+      labelPosition: bottom
+  - id: gps-last-lap
+    widget: textData
+    gridClass: "col-start-5 col-span-2 row-start-3 min-h-0 min-w-0 max-md:portrait:col-start-5 max-md:portrait:col-span-2 max-md:portrait:row-start-3"
+    params:
+      title: Last lap
+      channel: system.LapTimer.lastLapS
+      format: lapTime
+      lapTimeEmptyIfZero: true
+      unit: ""
+      decimals: 3
+      labelPosition: bottom
+  # Row 4 — reference records (last row): day best, or week best when today has none
+  - id: gps-ref-best
+    widget: textData
+    gridClass: "col-start-1 col-span-3 row-start-4 min-h-0 min-w-0 max-md:portrait:col-start-1 max-md:portrait:col-span-3 max-md:portrait:row-start-4"
+    params:
+      title: Best
+      labelSuffixChannel: system.LapTimer.refWindow
+      labelSuffixMap: { daily: " (day)", weekly: " (week)", allTime: " (all)" }
+      channel: system.LapTimer.refBestS
+      format: lapTime
+      lapTimeEmptyIfZero: true
+      unit: ""
+      decimals: 3
+      labelPosition: bottom
+  - id: gps-ref-optimal
+    widget: textData
+    gridClass: "col-start-4 col-span-3 row-start-4 min-h-0 min-w-0 max-md:portrait:col-start-4 max-md:portrait:col-span-3 max-md:portrait:row-start-4"
+    params:
+      title: Optimal
+      labelSuffixChannel: system.LapTimer.refWindow
+      labelSuffixMap: { daily: " (day)", weekly: " (week)", allTime: " (all)" }
+      channel: system.LapTimer.refOptimalS
+      format: lapTime
+      lapTimeEmptyIfZero: true
+      unit: ""
+      decimals: 3
+      labelPosition: bottom
+  # ===== Right half: inputs (one row tall) over the G meter (the rest) =====
+  - id: gps-inputs
+    widget: inputsChart
+    gridClass: "col-start-7 col-span-6 row-start-1 row-span-1 min-h-0 max-h-full min-w-0 max-md:portrait:col-start-1 max-md:portrait:col-span-6 max-md:portrait:row-start-5 max-md:portrait:row-span-1 max-md:portrait:h-[clamp(5rem,28vw,9rem)]"
+    params:
+      throttleChannel: throttlePedal
+      brakeChannel: brakePressure
+      steeringChannel: steeringAngle
+      showSteeringWheel: false
+      historySeconds: 8
+      fillHeight: true
+  - id: gps-g-meter
+    widget: gMeterWithInputs
+    gridClass: "col-start-7 col-span-6 row-start-2 row-span-3 min-h-0 min-w-0 max-md:portrait:col-start-1 max-md:portrait:col-span-6 max-md:portrait:row-start-6 max-md:portrait:row-span-1"
+    params:
+      title: G Meter
+      latChannel: accelLat
+      longChannel: accelLong
+      clampG: 5
+      showMaxEnvelope: true
+      resetMaxOnChangeOf: system.LapTimer.lapCount

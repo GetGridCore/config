@@ -1,0 +1,35 @@
+# Wired OBD-II / UDS on the 500 kbit/s bus (can0 — either car port; see canBuses in main.yml).
+# McLaren-specific UDS DIDs stay in mclarenDiag.yml (onlyIfVehicle: mclaren).
+key: genericDiagCAN
+bus: can0
+# One tester per bus: mclarenDiag owns can0 on a McLaren (it polls the same 0x7E0/0x7E1 and adds the UDS DIDs and
+# the UDS DTC read that Mode 03 alone does not return there). This source is the fallback for every other car —
+# including a car nobody configured — so it keeps polling while the vehicle is still unknown and steps aside the
+# moment `useToDetectVehicle` on the mclarenlife DBC names a McLaren.
+onlyIfNotVehicle: mclaren
+fromObd2:
+  - engineRpm
+  - vehicleSpeed
+  - coolantTemp
+  - intakeAirTemp
+  - ambientAirTemp
+  - intakeMap
+  - acceleratorPedalPositionD
+  - engineOilTemp
+  - controlModuleVoltage
+  - fuelLevel
+  - longTermFuelTrimBank1
+  - timingAdvance
+# No onlyIfBusNotSilent: an OBD-II port is often a quiet diagnostic gateway with no
+# broadcast traffic, so nothing arrives until we ask and the gate would never open. McLaren
+# keeps the gate — that source sits on live PT-CAN and must not chatter on a
+# sleeping car; it also waits for vehicle detection first.
+# Try the usual short CAN address first; if the vehicle never answers, use the long address
+# some trucks use, and keep whichever one works.
+obdAddressing: auto
+waitBetweenPolls: 200
+readDTCs:
+  moduleIds: [0x7E0, 0x7E1]
+  # Mode 03 only — UDS 0x19 timed out on this car (6 s per heavy pass). Re-enable if a vehicle needs it.
+  readDTCFromUDS: false
+heavyOperationsDebounceMs: 10000

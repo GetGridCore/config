@@ -1,0 +1,38 @@
+# Shared warning-banner widget — edit thresholds/colors here once, include it on any page that
+# should surface engine/device warnings. No params → built-in defaults (engine oil & coolant
+# cold+hot, charge-air hot, CPU temp, undervoltage); see the warningBanner widget for the rule schema.
+# The cold-engine advisories and charge-air hot only show with the engine running (rpm > 0): a parked
+# car heat-soaks its charge air without anything being wrong. A rule can be gated the same way with
+# `onlyIf: engineRunning`, or on any channel with `onlyIf: { channel, when, threshold }`.
+#
+# Usage: add `- !include warnings.yml` as the FIRST entry of a page's `widgets:` list AND give that
+# page's grid a leading `auto` row (prefix the row template with `auto_`; see overview.yml /
+# instrumentCluster.yml). The bar then sits flush under the control bar, spans the screen edge-to-edge,
+# and pushes the rows below it down. When no rule trips it renders nothing and that leading row
+# collapses to zero height.
+#
+# The grid MUST also have at least one flexible (`fr`/`1fr`) row below the banner to soak up the
+# leftover page height. Otherwise CSS stretches the auto banner row to fill the page, leaving a gap
+# under the banner that grows as banners clear. All the shipping pages already have `fr` rows.
+id: warnings
+widget: warningBanner
+gridClass: "col-span-full row-start-1 min-w-0"
+params:
+  # Extra rules evaluated before the built-in defaults (keepDefaults stays on, so every car still
+  # gets the generic engine/device alarms). Each entry is inert on cars whose channel doesn't exist.
+  rules:
+    # Praga only: surface a battery / main-supply dip the INSTANT it happens (atLeastFor: 0, no
+    # debounce) — a split-second brownout toward ~8 V is exactly what triggers paddle-shift loss, so
+    # the 4 s debounce on the generic Battery Voltage Low default (good for road cars) would hide it.
+    # Bound to the Praga's own battery channel, so it stays inert on every other car. It's a separate
+    # rule from the default (different channel ⇒ different identity), so it adds to — never replaces —
+    # the shared default, and being a user rule it shadows the 4 s default on the Praga.
+    - channel: praga.BatteryEcu_376.ecuBatteryV
+      when: lowerThan
+      threshold: 11.5
+      title: Battery Voltage Low
+      detail: Check power / brownout
+      unit: V
+      decimals: 1
+      severity: 50
+      atLeastFor: 0

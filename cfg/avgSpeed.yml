@@ -1,0 +1,11 @@
+# Average speed (section control) zones: one widget filling the page. Off by default — the page is in
+# the dashboard only while `avgSpeedPage` is on (Settings → Internal functions).
+# Included from main.yml via `!include avgSpeed.yml`. Row 1 is the warning banner's `auto` row (see
+# cfg/warnings.yml); the widget fills row 2.
+id: avgSpeed
+contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-12 grid-rows-[auto_minmax(0,1fr)] gap-[clamp(10px,2.2vw,24px)] max-md:col-span-1 max-md:grid-cols-1 max-md:grid-rows-[auto_minmax(0,1fr)]"
+widgets:
+  - !include warnings.yml
+  - id: avg-speed-zone-main
+    widget: avgSpeedZone
+    gridClass: "col-start-1 col-span-12 row-start-2 min-h-[min(60vh,600px)] min-w-0 max-md:col-span-1"

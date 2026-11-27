@@ -1,0 +1,126 @@
+# Shared top-level `channelAliases` fragment — add more comma-separated paths per line for new vehicles / OBD.
+# Lap session logs always include one column per key below (value or null); those columns ignore lapTimer.dataLog.includeChannels.
+# A comma entry prefixed with `=` is a math expression (no parens, no division): `=source.Msg.Sig*9-1`,
+# `=chan*2`, `=chan+5`, `=chan-3`, or a plain constant `=100`. Forms: chan*y, chan*y+/-x, chan+/-x.
+# e.g.  latG: bmwG.latG, =porsche.ESP.gLat*9-1   (first valid entry wins, same as path fallbacks)
+# `=` entries convert ONE raw channel's units inside a row. A value combined from several channels
+# (a ratio, a share, a gated reading) is a math channel instead — cfg/mathChannels.yml, read here as
+# `math.<name>`. An entry may also name another alias (expanded in place).
+# Sims report one gear value — it feeds BOTH target and engaged so the gear-mismatch
+# widget stays quiet (target-only null reads as a permanent mismatch).
+# Praga Gear_392 counts 0 = R, 1 = N, 2 = 1st … 7 = 6th; −1 gives the N = 0, R = −1 convention.
+gearTarget: mclarenlife.Unknown_Gear_162.NGearTarget, =praga.Gear_392.gearPosition-1, simhubTelemetry.gearNum
+gearEngaged: mclarenlife.Unknown_Gear_162.NGearEngaged, =praga.Gear_392.gearPosition-1, simhubTelemetry.gearNum
+# `simhubTelemetry.*` entries (always last = lowest priority): SimHub MQTT Publisher sim rig wire
+# (`SIMHUB_MQTT_URL` + `SIMHUB_MQTT_TOPIC`); the source is inert without those env vars, so these
+# rows never fire on real cars.
+rpm: mclarenlife.ECM_EngineSpeed_131.nEngine, cayman.Throttle.Throttle_RPM, praga.Engine_368.engineRpm, ds2Dme.rpm, mclarenDiag.engineRpm, genericDiagCAN.engineRpm, genericDiag.engineRpm, simhubTelemetry.engineRpm
+coolantTemp: mclarenlife.ECM_EngineAndAmbient_128.TCoolant, cayman.Temps.Coolant, praga.Temps_272.coolantTempC, ds2Dme.coolantTempC, mclarenDiag.coolantTemp, genericDiagCAN.coolantTemp, genericDiag.coolantTemp, simhubTelemetry.waterTempC
+ambientTemp: mclarenlife.ECM_AmbientRaw_262.TAmbient, cayman.Fuel.KBI_Outside_Temp, mclarenDiag.ambientAirTemp, genericDiagCAN.ambientAirTemp, genericDiag.ambientAirTemp
+# Charge-air / IAT: McLaren CAN TAirCharge, UDS DID 0x0314, OBD, Praga ECU, generic OBD-II diag
+intakeAirTemp: mclarenlife.ECM_DriverDemand_130.TAirCharge, cayman.Temps.Intake_Temp, praga.Temps_272.intakeAirTempC, ds2Dme.intakeAirTempC, mclarenDiag.uds.intakeAirTemp, mclarenDiag.intakeAirTemp, genericDiagCAN.intakeAirTemp, genericDiag.intakeAirTemp
+gearboxOilTemp: mclarenlife.ECM_ClutchOil_165.TClutchOil, praga.GbxOil_416.gearboxOilTempC
+engineOilTemp: mclarenlife.ECM_EngineOil_170.TEngineOil, cayman.Temps.Oil, praga.Temps_272.engineOilTempC, mclarenDiag.engineOilTemp, genericDiagCAN.engineOilTemp, genericDiag.engineOilTemp, simhubTelemetry.oilTempC
+batteryVoltage: mclarenlife.Gateway_Battery_212.vBattery, praga.BatteryEcu_376.ecuBatteryV, ds2Dme.batteryV, mclarenDiag.controlModuleVoltage, genericDiagCAN.controlModuleVoltage, genericDiag.controlModuleVoltage
+# Manifold pressure in kPa (OBD-II PID 0x0B's unit); the Praga ECU reports mbar.
+intakeMap: mclarenDiag.intakeMap, =praga.Engine_368.intakeMapMbar*0.1, genericDiagCAN.intakeMap, genericDiag.intakeMap
+fuelLevel: cayman.Fuel.KBI_Contents_Tank, mclarenDiag.fuelLevel, genericDiagCAN.fuelLevel, genericDiag.fuelLevel, simhubTelemetry.fuelPercent
+vehicleSpeed: mclarenlife.Gateway_Speed_216.vVehicleIC, cayman.Speed.KBI_displayed_speed, praga.Engine_368.vehicleSpeedKph, ds2Dme.vehicleSpeedKph, mclarenDiag.vehicleSpeed, genericDiagCAN.vehicleSpeed, genericDiag.vehicleSpeed, simhubTelemetry.speedKph
+odometerKm: cayman.Diagnose_01.KBI_Odometer_K, mclarenDiag.odometerKm, mclarenDiag.uds.odometerKm
+# simhubTelemetry.accel* are DERIVED g forces (long = dv/dt, lat = v·yaw-rate) — the sim
+# publisher carries no accelerometer; live only on the sim rig.
+# G sign convention (every source in these rows must comply — see gMeterDisplayVector in
+# src/widgets/gMeterShared.ts): accelLat + = vehicle RIGHT, accelLong + = FORWARD accel
+# (braking negative). Verified on track data: McLaren VCU gLat/gLong, system.imu.* (LSM6DSL
+# and BMI088), SimHub derived G. Cayman ESP and AiM entries are assumed, not yet verified —
+# check a known corner before trusting a new source's sign.
+accelLat: mclarenlife.Unknown_IMU_194.gLat, cayman.ESP_02.ESP_Lateral_accel, aim.AIM_AccelXYZ_6A2.LateralAcc_g, system.imu.accelLat, simhubTelemetry.accelLat
+accelLong: mclarenlife.Unknown_IMU_194.gLong, cayman.ESP_02.ESP_Longitudinal_adj, aim.AIM_AccelXYZ_6A2.InlineAcc_g, system.imu.accelLong, simhubTelemetry.accelLong
+# `ds2Dme.throttlePct` is the throttle plate (BMW DS2, E36 M44); on that cable-throttle car it stands in for the pedal.
+throttlePedal: mclarenlife.ECM_DriverDemand_130.rThrottlePedal, cayman.Throttle.Throttle_Position, praga.Accel_264.throttlePedalPct, ds2Dme.throttlePct, mclarenDiag.acceleratorPedalPositionD, genericDiagCAN.acceleratorPedalPositionD, genericDiag.acceleratorPedalPositionD, simhubTelemetry.throttlePct
+# Brake line pressure (bar) per circuit, on cars that measure both — inputs of the brake bias /
+# brake % math channels (cfg/mathChannels.yml).
+# Analog rows: Bosch 0 261 545 053 (0–140 bar, 0.5–4.5 V on a 5 V supply) on the analog-to-CAN
+# module, front on A6, rear on A5: bar = (mV − 500) × 140 / 4000. For another sensor range R bar,
+# the multiplier is R / 4000 and the offset −500 × that.
+# Not the Praga's own praga.Brake_432: it is a fixed 5.0 / 5.0 bar placeholder (every frame of the
+# 2026-10-09 track session, through braking) and would shadow the sensors.
+brakePressureFront: =analogCan.AD8_Ch4_7.Voltage6*0.035-17.5
+brakePressureRear: =analogCan.AD8_Ch4_7.Voltage5*0.035-17.5
+# Single brake pressure for the pedal trace / overlay: the car's one sensor, else the front circuit.
+# Last entry is sim brake pedal % (not bar) — scale-compatible with the cluster's brakeMax: 100
+# and only live on the sim rig, where no bar-valued source exists to be shadowed.
+brakePressure: mclarenlife.ESP_Brake_195.pBrake, cayman.Brakes.Brake_PressureSig352, brakePressureFront, simhubTelemetry.brakePct
+steeringAngle: mclarenlife.Unknown_Steering_176.aSteeringWheel, cayman.Steering.LWI_Steering_angle, simhubTelemetry.steeringDeg
+# Composite position for widgets (weather, maps), LapTimer, and JSONL alias columns — keep `gpsLat` / `gpsLon` / `gpsSpeedKph` /
+# `gpsHorizontalAccuracyM` / `gpsSatellites` the same length and order (each comma-separated row = one physical source; first valid lat/lon pair wins).
+# `gpsHorizontalAccuracyM`: horizontal accuracy in **metres** (paired with the same source row as lat/lon/speed).
+gpsLat: system.gps.latitudeDeg, aim.AIM_GPSLatLon_6A3.GPSLatitude_deg, racebox.nav.latitudeDeg, system.WebGPS.latitudeDeg, simhubTelemetry.gps.latitudeDeg
+gpsLon: system.gps.longitudeDeg, aim.AIM_GPSLatLon_6A3.GPSLongitude_deg, racebox.nav.longitudeDeg, system.WebGPS.longitudeDeg, simhubTelemetry.gps.longitudeDeg
+gpsSpeedKph: system.gps.gpsSpeedKph, aim.AIM_GPSQuality_6A1.GPSSpeed_kph_x10, racebox.nav.gpsSpeedKph, system.WebGPS.gpsSpeedKph, simhubTelemetry.gps.gpsSpeedKph
+gpsHorizontalAccuracyM: system.gps.horizontalAccuracyM, aim.AIM_GPSQuality_6A1.GPSPosAccuracy_m, racebox.nav.horizontalAccuracyM, system.WebGPS.horizontalAccuracyM, simhubTelemetry.gps.horizontalAccuracyM
+# Satellite count — paired by source index with lat/lon/accuracy (WebGPS omitted: browsers do not expose it).
+gpsSatellites: system.gps.satellites, aim.AIM_GPSQuality_6A1.GPSSatellites, racebox.nav.numSVs
+# GNSS fix epoch (ms) — the receiver's own sample instant; drives LapTimer interpolation & start/finish timing
+# (also a JSONL column). Entries pair by source index with the lat/lon rows above (ublox, aim, racebox).
+# WebGPS and the SimHub virtual GPS are intentionally omitted: neither has a trustworthy per-fix epoch,
+# so their rows fall through to host-arrival time. A missing/null epoch always falls back to host-arrival time.
+gpsSampleTimeMs: system.gps.tsMs, aim.AIM_Time_6A0.RollingTime_ms, racebox.nav.tsMs
+# OE + BLE TPMS pressure (bar) and surface temperature (°C), one alias per corner.
+# Priority: McLaren OE CAN → Chinese BLE sensors. The video overlay and lap analysis fall back
+# to these after confirming no IZZE TTPMS data is present.
+tpmsPressureLF:
+  channels: mclarenlife.TPMS_McLaren_450.pTireFL, chineseBLETPMS.LF.pressureBar, simhubTelemetry.tpms.lfPressureBar
+  santinelOverOrEq: 6.375
+tpmsPressureRF:
+  channels: mclarenlife.TPMS_McLaren_450.pTireFR, chineseBLETPMS.RF.pressureBar, simhubTelemetry.tpms.rfPressureBar
+  santinelOverOrEq: 6.375
+tpmsPressureLR:
+  channels: mclarenlife.TPMS_McLaren_450.pTireRL, chineseBLETPMS.LR.pressureBar, simhubTelemetry.tpms.lrPressureBar
+  santinelOverOrEq: 6.375
+tpmsPressureRR:
+  channels: mclarenlife.TPMS_McLaren_450.pTireRR, chineseBLETPMS.RR.pressureBar, simhubTelemetry.tpms.rrPressureBar
+  santinelOverOrEq: 6.375
+tpmsTemperatureLF: mclarenlife.TPMS_McLaren_450.TTireFL, chineseBLETPMS.LF.tempC, simhubTelemetry.tpms.lfTempC
+tpmsTemperatureRF: mclarenlife.TPMS_McLaren_450.TTireFR, chineseBLETPMS.RF.tempC, simhubTelemetry.tpms.rfTempC
+tpmsTemperatureLR: mclarenlife.TPMS_McLaren_450.TTireRL, chineseBLETPMS.LR.tempC, simhubTelemetry.tpms.lrTempC
+tpmsTemperatureRR: mclarenlife.TPMS_McLaren_450.TTireRR, chineseBLETPMS.RR.tempC, simhubTelemetry.tpms.rrTempC
+# Driver-adjustable car settings for the `carSettingsBar` widget: traction control level and
+# "intervening" flag, ABS level and flag, engine map, brake bias (% front). TC / ABS / map are NOT YET
+# PROVIDED by any real car's decode — only the sim rig (SimHub) reports them; brake bias is also
+# computed from front/rear line pressure (below). Add a vehicle's own signal FIRST in each row when its DBC/PID is known.
+tcLevel: simhubTelemetry.tcLevel
+tcActive: simhubTelemetry.tcActive
+absLevel: simhubTelemetry.absLevel
+absActive: simhubTelemetry.absActive
+engineMap: simhubTelemetry.engineMap
+# Active brake bias (% front). Sources that report it first, then the math channels computed from
+# front/rear line pressure (cfg/mathChannels.yml).
+brakeBiasPct: simhubTelemetry.brakeBias, math.singleSeaterBrakeBiasPct
+# Brake pedal effort, 0–100 %. Math channels scale a line pressure by the car's full pressure; the sim
+# reports pedal % directly.
+brakePct: math.singleSeaterBrakePct, simhubTelemetry.brakePct
+# BLE chest strap / armband (Bluetooth Heart Rate Profile).
+heartRateBpm: bleHeartRate.bpm
+# DTC text channel for the default warning banner. Points to the `DTCsAtLastRead` text channel of
+# each known OBD2 source (first non-empty value wins). The banner is automatically suppressed on
+# vehicles without OBD2 configured. To disable the DTC banner entirely, override this alias in your
+# vehicle config to a path that is never populated (e.g. a non-existent channel), or set
+# `keepDefaults: false` on the warningBanner widget and declare only the rules you want.
+dtcAtLastRead: mclarenDiag.DTCsAtLastRead, genericDiagCAN.DTCsAtLastRead, genericDiag.DTCsAtLastRead
+
+# On-board environment + device power sensors (carrier v2.00 or the BerryGPS-IMU HAT).
+# Barometer: BMP388 on the sensor I2C bus (GPIO38/39). Altitude is barometric, sea-level-referenced,
+# so it drifts with weather — use it for elevation *change* through a lap, not absolute height.
+baroPressureHPa: system.baro.baroPressureHPa
+baroTempC: system.baro.baroTempC
+baroAltitudeM: system.baro.baroAltitudeM
+# The device's own backup pack (system.battery.*, MAX17048 battery gauge) is deliberately NOT
+# aliased: system.* is always logged as-is, and it must never be aliased onto the vehicle 12 V
+# (`batteryVoltage` above, from CAN/OBD).
+# Magnetic heading from the on-board compass (BMM350 on v2.00, LIS3MDL on the HAT), degrees
+# 0–360 from magnetic north, uncorrected for declination or installation hard-iron. Raw field
+# in µT is published too (system.mag.fieldXuT/YuT/ZuT) but is not calibrated — see the driver.
+magHeadingDeg: system.mag.headingDeg
+# 1 once the compass has turned enough to fit its hard-iron offset; heading is only trustworthy then.
+magCalibrated: system.mag.calibrated

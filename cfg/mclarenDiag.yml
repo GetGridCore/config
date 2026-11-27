@@ -1,0 +1,135 @@
+# OBD-II / UDS channel source: McLaren bus diagnostics (referenced via `!include mclarenDiag.yml` in cfg/*.yml).
+key: mclarenDiag
+bus: can0
+onlyIfVehicle: mclaren
+# Wait to be told this is a McLaren before transmitting, instead of taking the usual "vehicle undetermined means
+# every profile" default. genericDiagCAN holds can0 until then (onlyIfNotVehicle: mclaren), so the two never both
+# poll 0x7E0/0x7E1 — with this omitted, both would run side by side for the ~0.5 s detection takes.
+onlyIfVehicleKnown: true
+fromObd2:
+  - fuelLevel
+  - intakeMap
+  - acceleratorPedalPositionD
+  - coolantTemp
+  - intakeAirTemp
+  - ambientAirTemp
+  # STFT = immediate trim, LTFT = learned; both useful for lean codes (P017x); transient/off-idle bias often shows in STFT.
+  #- shortTermFuelTrimBank1
+  #- shortTermFuelTrimBank2
+  - longTermFuelTrimBank1
+  - longTermFuelTrimBank2
+onlyIfBusNotSilent: true
+onlyIfBusNotSilentWithinMs: 2000
+# Defer OBD until McLaren ECM reports engine speed (same bus / DBC as instrument cluster).
+# onlyIfChannelNonZero: mclarenlife.ECM_EngineSpeed_131.nEngine
+waitBetweenPolls: 200
+
+# Multi-PID Mode 01 batching — was broken by our own bug, now fixable; verify on-car before relying on it.
+# History: `obdMode01BatchSize: 6` gave sporadic timeouts and looked like "the ECM rejects multi-PID / it's
+# gateway-dependent". Real root cause was our ISO-TP flow control. A 6-PID reply exceeds one CAN frame, so the
+# ECM sends a First Frame and waits for a Flow Control frame before continuing. We were sending FC to the
+# functional broadcast id 0x7DF (the Mode 01 request address) instead of the ECM's physical address 0x7E0 —
+# non-compliant per ISO 15765-4, so the ECM never sent the consecutive frames and the request timed out.
+# Single-PID replies fit in one frame (no FC needed) → always worked; physically-addressed UDS reads
+# (0x7E0/0x7E1/0x730) also worked because FC went to the right address. "Sporadic" was just the single-frame vs
+# multi-frame boundary moving as PIDs came and went. Fixed in obdIsoTp.ts (FC now targets responseRx-8).
+# Upside on wired CAN is modest (~10–20 ms/request), so enable only if you want it; confirm with a candump that
+# consecutive frames (21.., 22.. on 0x7E8) now arrive after the First Frame.
+# obdMode01BatchSize: 6
+
+# Examples: [0x7E0] ECM only — [0x7E0, 0x7E1] ECM + TCU
+# McLaren ECM accepts UDS 0x19 and 0x22 in default session (NRC 0x78 responsePending is its normal response, not a session error).
+# Note: the ECU/TCU fault-code clear (Settings → Vehicle diagnostics) opens its own extended session — no need to list them here.
+# extendedSession: [0x7E0]
+customUDSChannels:
+  - name: intakeAirTemp
+    did: 0x0314
+    dataBits: 16
+    multiplier: 0.0234375
+    addBefore: 0
+    addAfter: -273.15
+  - name: fuelRailTempC
+    did: 0x032F
+    dataBits: 8
+    multiplier: 0.75
+    addBefore: 0
+    addAfter: -48
+  - name: fuelRailPressureActkPa
+    did: 0x0330
+    dataBits: 16
+    multiplier: 0.1
+    addBefore: 0
+    addAfter: 0
+  # ESC brake master cylinder pressure (UDS 0x22 DID 0x0301). ESC returns a long 0x62 record; value is not at offset 0.
+  # This channel works, and it's point is to show how to get data from different modules
+  # - name: escBrakeMasterCylPressureBar
+  #   did: 0x0301
+  #   dataBits: 16
+  #   # Note that the value is 0xff 00 00 when the pedal is not pressed, so we have a santinel max-ish
+  #   valueStartBit: 96
+  #   multiplier: 0.1220
+  #   txID: 0x730
+  #   rxID: 0x738
+  # --- Optional UDS (0x22); channel = mclarenDiag.uds.<name>. Uncomment by copying a block above (same indent) and removing "# ".
+  # Overlap note: mclarenlife CAN already has MEngine / MPowertrainDriverDemanded (torque), pBoost (single), TAirCharge, QInstantFuelConsumed, etc.; see cfg/dbc/mclaren_*.dbc. OBD can add commandedEquivalenceRatio, trims, catalyst temps, timingAdvance without UDS (canObd2DataSources).
+  # No physical EGT in cheat sheet: 0x0344/0x0345 are modelled / not wired on many cars; omitted on purpose.
+  # Per-bank boost actual (hPa). CAN only exposes one pBoost; RH 0x0316, LH 0x0317; cmd targets 0x0318 / 0x0319.
+  # How to source more channels: https://github.com/Ivshti/tactrix-logging, https://www.mclarenlife.com/threads/how-to-do-standalone-data-logging-on-the-stock-ecu-using-tactrix-openport-2-0.116732/ 
+  # - name: boostLhActHpa
+  #   did: 0x0317
+  #   dataBits: 16
+  #   multiplier: 0.078125
+  # Wideband lambda RH (~1.0 stoich). LH 0x033B. Not on mclarenlife DBC; OBD has commanded λ (PID 0x44), not per-bank measured.
+  - name: wbo2RhLambda
+    did: 0x033A
+    dataBits: 16
+    multiplier: 0.00024414
+  # TCU (0x7E1 → 0x7E9): one ReadDID returns two int16 BE × 0.01 (airbrake positions). candumps/diagAirbrake.slcan.
+  - name: airbrakePos1
+    did: 0x030C
+    dataBits: 16
+    dataByteOffset: 0
+    signed: true
+    multiplier: 0.01
+    addBefore: 0
+    addAfter: 0
+    toAddress: 0x7E1
+    fromAddress: 0x7E9
+  - name: airbrakePos2
+    did: 0x030C
+    dataBits: 16
+    dataByteOffset: 2
+    signed: true
+    multiplier: 0.01
+    addBefore: 0
+    addAfter: 0
+    toAddress: 0x7E1
+    fromAddress: 0x7E9
+  # Cam VVT (deg), raw/128. ACT = measured, CMD = setpoint. Not on CAN.
+  #   LH intake: ACT 0x0332, CMD 0x0336
+  #   LH exhaust: ACT 0x0333, CMD 0x0337
+  #   RH intake: ACT 0x0334, CMD 0x0338
+  #   RH exhaust: ACT 0x0335, CMD 0x0339
+  # - name: lhIntCamActDeg
+  #   did: 0x0332
+  #   dataBits: 16
+  #   multiplier: 0.0078125
+  # Exhaust valve / flap position (logger RPN ÷2). This is cool for OEM cars
+  # - name: exhaustFlapPos
+  #   did: 0x043E
+  #   dataBits: 16
+  #   multiplier: 0.5
+readDTCs:
+  # Physical ECU addresses (tester → ECU): 0x7E0 = engine / ECM, 0x7E1 = second ECU (e.g. transmission) on many OEM buses (TCU on McLaren).
+  # 0x730 (ESC) omitted — no response seen in diagnostic captures; querying it wastes 1200 ms per cycle.
+  # otherwise when there IS an error, it DOES respond
+  moduleIds: [0x7E0, 0x7E1]
+  # Optional UDS ReadDTCInformation (0x19 reportDTCByStatusMask); merged with Mode 03 in channels when enabled.
+  # This is theoretically needed on some cars to unlock error reading or UDS channel reading,
+  # but it's not needed for McLaren
+  # McLaren ECM Mode 03 returns empty (43 00) even when faults exist; UDS 0x19 is the only path that returns actual DTCs.
+  readDTCFromUDS: true
+# Min ms between heavy diagnostic runs (clear + Mode 03 verify + optional UDS 0x19). Omit to use runtime default (30000).
+heavyOperationsDebounceMs: 10000
+# Clearing fault codes (ECU 0x7E0 + TCU 0x7E1) is a device setting, not a source one: Settings → Vehicle diagnostics
+# (`diagnostics.autoClearDtcs` in main.yml) and its "Clear now" button.

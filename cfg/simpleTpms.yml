@@ -1,0 +1,110 @@
+# Simple TPMS compare page: OEM McLaren TPMS vs BLE TPMS.
+# Included from main.yml via `!include simpleTpms.yml`.
+id: simple-tpms
+contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-4 grid-rows-2 gap-[clamp(10px,1.8vw,22px)] max-lg:portrait:col-span-2 max-lg:portrait:row-start-1 max-lg:portrait:grid-cols-2 max-lg:portrait:grid-rows-[repeat(4,minmax(0,1fr))] max-md:col-span-1"
+widgets:
+  - id: oem-tire-lf
+    widget: tire
+    gridClass: "col-start-1 row-start-1"
+    params:
+      corner: LF
+      subtitle: OE
+      tempChannel: mclarenlife.TPMS_McLaren_450.TTireFL
+      pressureChannel: mclarenlife.TPMS_McLaren_450.pTireFL
+      batteryChannel: ""
+      optimalTemp: 27
+      optimalTempRange: 20
+      # TPMS_McLaren_450 pTire* physical max (bar) in cfg/dbc/mclaren_720s.dbc — saturated reading → "waiting"
+      sentinelPressure: 6.375
+      pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+  - id: oem-tire-rf
+    widget: tire
+    gridClass: "col-start-2 row-start-1 lg:mr-[clamp(8px,1.1vw,14px)]"
+    params:
+      corner: RF
+      subtitle: OE
+      tempChannel: mclarenlife.TPMS_McLaren_450.TTireFR
+      pressureChannel: mclarenlife.TPMS_McLaren_450.pTireFR
+      batteryChannel: ""
+      optimalTemp: 27
+      optimalTempRange: 20
+      sentinelPressure: 6.375
+      pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+  - id: oem-tire-lr
+    widget: tire
+    gridClass: "col-start-1 row-start-2"
+    params:
+      corner: LR
+      subtitle: OE
+      tempChannel: mclarenlife.TPMS_McLaren_450.TTireRL
+      pressureChannel: mclarenlife.TPMS_McLaren_450.pTireRL
+      batteryChannel: ""
+      optimalTemp: 27
+      optimalTempRange: 20
+      sentinelPressure: 6.375
+      pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+  - id: oem-tire-rr
+    widget: tire
+    gridClass: "col-start-2 row-start-2 lg:mr-[clamp(8px,1.1vw,14px)]"
+    params:
+      corner: RR
+      subtitle: OE
+      tempChannel: mclarenlife.TPMS_McLaren_450.TTireRR
+      pressureChannel: mclarenlife.TPMS_McLaren_450.pTireRR
+      batteryChannel: ""
+      optimalTemp: 27
+      optimalTempRange: 20
+      sentinelPressure: 6.375
+      pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+  - id: ble-tire-lf
+    widget: tire
+    gridClass: "col-start-3 row-start-1 lg:ml-[clamp(8px,1.1vw,14px)] max-lg:portrait:col-start-1 max-lg:portrait:row-start-3"
+    params:
+      corner: LF
+      subtitle: BLE
+      tempChannel: chineseBLETPMS.LF.tempC
+      pressureChannel: chineseBLETPMS.LF.pressureBar
+      batteryChannel: chineseBLETPMS.LF.batteryPct
+      batteryUnit: "%"
+      optimalTemp: 27
+      optimalTempRange: 20
+      pressureBands: !include fragments/pressureBandsBleTpms.yml
+  - id: ble-tire-rf
+    widget: tire
+    gridClass: "col-start-4 row-start-1 max-lg:portrait:col-start-2 max-lg:portrait:row-start-3"
+    params:
+      corner: RF
+      subtitle: BLE
+      tempChannel: chineseBLETPMS.RF.tempC
+      pressureChannel: chineseBLETPMS.RF.pressureBar
+      batteryChannel: chineseBLETPMS.RF.batteryPct
+      batteryUnit: "%"
+      optimalTemp: 27
+      optimalTempRange: 20
+      pressureBands: !include fragments/pressureBandsBleTpms.yml
+  - id: ble-tire-lr
+    widget: tire
+    gridClass: "col-start-3 row-start-2 lg:ml-[clamp(8px,1.1vw,14px)] max-lg:portrait:col-start-1 max-lg:portrait:row-start-4"
+    params:
+      corner: LR
+      subtitle: BLE
+      tempChannel: chineseBLETPMS.LR.tempC
+      pressureChannel: chineseBLETPMS.LR.pressureBar
+      batteryChannel: chineseBLETPMS.LR.batteryPct
+      batteryUnit: "%"
+      optimalTemp: 27
+      optimalTempRange: 20
+      pressureBands: !include fragments/pressureBandsBleTpms.yml
+  - id: ble-tire-rr
+    widget: tire
+    gridClass: "col-start-4 row-start-2 max-lg:portrait:col-start-2 max-lg:portrait:row-start-4"
+    params:
+      corner: RR
+      subtitle: BLE
+      tempChannel: chineseBLETPMS.RR.tempC
+      pressureChannel: chineseBLETPMS.RR.pressureBar
+      batteryChannel: chineseBLETPMS.RR.batteryPct
+      batteryUnit: "%"
+      optimalTemp: 27
+      optimalTempRange: 20
+      pressureBands: !include fragments/pressureBandsBleTpms.yml

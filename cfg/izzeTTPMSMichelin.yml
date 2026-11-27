@@ -1,0 +1,65 @@
+# IZZE IR TTPMS + Michelin tyre pressure bands (this layout / tyre choice). Referenced via `!include izzeTtpmsMichelin.yml`.
+id: ttpms
+onlyIfChannel: "ttpms.*"
+contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-12 grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] gap-[clamp(6px,min(1.5vw,2vmin),20px)] phone-landscape:gap-1"
+widgets:
+  - id: ttpms-last-lap
+    widget: textData
+    gridClass: "col-start-1 col-span-4 row-start-1 min-w-0 self-start w-full"
+    params:
+      title: Last lap
+      channel: system.LapTimer.lastLapS
+      format: lapTime
+      lapTimeEmptyIfZero: true
+      unit: ""
+      decimals: 3
+      labelPosition: bottom
+  - id: ttpms-best-lap
+    widget: textData
+    gridClass: "col-start-5 col-span-4 row-start-1 min-w-0 self-start w-full"
+    params:
+      title: Best lap
+      channel: system.LapTimer.bestLapS
+      format: lapTime
+      lapTimeEmptyIfZero: true
+      unit: ""
+      decimals: 3
+      labelPosition: bottom
+  - id: ttpms-lap-delta
+    widget: textDataLapDelta
+    gridClass: "col-start-9 col-span-4 row-start-1 min-w-0 self-start w-full"
+    params:
+      channel: system.LapTimer.deltaEstim
+      format: signedDelta
+      decimals: 2
+      unit: "Δ lap delta"
+      labelPosition: bottom
+      title: ""
+  - id: tire-lf
+    widget: ttpms
+    gridClass: "col-start-1 col-span-6 row-start-2 min-w-0"
+    params:
+      corner: LF
+      pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+  - id: tire-rf
+    widget: ttpms
+    gridClass: "col-start-7 col-span-6 row-start-2 min-w-0"
+    params:
+      corner: RF
+      pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+  - id: tire-lr
+    widget: ttpms
+    gridClass: "col-start-1 col-span-6 row-start-3 min-w-0"
+    params:
+      corner: LR
+      pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+  - id: tire-rr
+    widget: ttpms
+    gridClass: "col-start-7 col-span-6 row-start-3 min-w-0"
+    params:
+      corner: RR
+      pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+  - id: tpms-temp-legend
+    widget: tpmsTempLegend
+    gridClass: "col-start-1 col-span-12 row-start-4 w-full min-w-0 self-start"
+    params: {}

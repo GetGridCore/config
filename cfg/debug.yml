@@ -1,0 +1,227 @@
+# Debug: channel dump + recording / session lap / heart-rate diagnostics at the bottom.
+# Included from main.yml via `!include debug.yml`.
+id: debug
+# Four-column grid at >=768px (`md:`), collapsing to a single stacked column below that — the same
+# threshold DEFAULT_MAIN_PAGE/DEFAULT_DEBUG_PAGE use in uiConfig.ts. Deliberately NOT `lg:` (1024px):
+# the kiosk panels render with --force-device-scale-factor=1.3, so CSS viewport width is physical
+# width / 1.3 — the widest kiosk panel (Waveshare 7"E, 1280x800) tops out at ~985 CSS px, and the 7"C
+# (1024x600) at ~788, both under 1024. `lg:` never fires on any physical device this runs on; only a
+# desktop browser window ever saw the multi-column layout. `md:` fires on both 7" panels (only the 5"
+# panel, ~615 CSS px, still collapses to one column), matching the rest of the app.
+# The GPS strip and the channel dump span the full width; the satellite map and sky view split
+# 3:1 (see below); the three compact diagnostic tables (recordings, session laps, heart-rate
+# monitors) each take one quarter of the row when wide and stack full width when narrow. The page
+# scrolls via the outer #dash-root container, so the channel table can grow as tall as it needs
+# without clamping the tables below it.
+contentGridClass: "dash-page-stack col-span-2 row-start-1 row-span-1 grid grid-cols-1 md:grid-cols-4 md:items-start min-w-0 gap-[clamp(12px,2.2vw,26px)] max-md:col-span-1"
+widgets:
+  - id: debug-gps-lap-strip
+    widget: textDataStripGrid
+    gridClass: "min-w-0 md:col-span-4"
+    params:
+      # Diagnostic values are wide (ratios, two-decimal metres, percentages) in cells this row
+      # divides many ways, so the default value size overflows them. Set once for the whole strip;
+      # a column can still override it.
+      valueSize: small
+      columns:
+        - variant: textData
+          title: GPS Speed
+          channel: gpsSpeedKph
+          unit: km/h
+          decimals: 1
+          labelPosition: bottom
+          portraitSize: small
+        - variant: textData
+          title: GPS H.Acc
+          channel: gpsHorizontalAccuracyM
+          unit: m
+          decimals: 2
+          labelPosition: bottom
+          portraitSize: small
+          warnAbove: 5
+          warnColor: "#fb923c"
+        - variant: textData
+          title: Last Snap Err
+          channel: system.LapTimer.lastDistanceToSnap
+          unit: m
+          decimals: 1
+          labelPosition: bottom
+          portraitSize: small
+        - variant: textData
+          title: Dist Snapped
+          channel: system.LapTimer.distanceSnapped
+          unit: m
+          decimals: 0
+          labelPosition: bottom
+          portraitSize: small
+        - variant: textData
+          title: Rolling
+          channel: system.LapTimer.rollingLapTimeS
+          format: lapTime
+          decimals: 3
+          labelPosition: bottom
+          portraitSize: small
+        - variant: textData
+          title: Video Sync
+          channel: system.videoSyncProgress
+          unit: "%"
+          decimals: 0
+          labelPosition: bottom
+          portraitSize: small
+  - id: debug-gps-rf-strip
+    widget: textDataStripGrid
+    gridClass: "min-w-0 md:col-span-4"
+    params:
+      valueSize: small
+      columns:
+        - variant: textData
+          title: GPS Sats
+          channel: system.gps.satellites
+          channelDenom: system.gps.satsTracked
+          decimals: 0
+          labelPosition: bottom
+          portraitSize: small
+          warnUnder: 6
+          warnColor: "#fb923c"
+        - variant: textData
+          title: With Eph
+          channel: system.gps.satsWithEph
+          decimals: 0
+          labelPosition: bottom
+          portraitSize: small
+          warnUnder: 4
+          warnColor: "#fb923c"
+        # Named for the quantity, not "Signal": this is a carrier-to-noise-DENSITY ratio
+        # (dBHz — W per W/Hz, so it is bandwidth-independent and is NOT SNR), averaged over
+        # the four strongest *tracked* satellites. The phrasing matches
+        # hardware/carrier/gnss-antenna-selection.md so a dash reading is lookup-able there.
+        # 0 means "nothing is tracked" (the mean of an empty set), not "no signal" — so it
+        # renders as a dash. Any real value is >= 1.0, since a tracked satellite has cno >= 1.
+        - variant: textData
+          title: Top-4 C/N₀
+          channel: system.gps.cnoTop4
+          unit: dBHz
+          decimals: 1
+          labelPosition: bottom
+          portraitSize: small
+          warnUnder: 30
+          warnColor: "#fb923c"
+          rewriteNumberAs:
+            "0": "—"
+        - variant: textData
+          title: Antenna
+          channel: system.gps.antStatus
+          channelDenom: system.gps.antPower
+          labelPosition: bottom
+          portraitSize: small
+        # Whether the fix is SBAS/DGPS-corrected. Earned its slot off the 18-drive review: only
+        # three drives ever held a correction at all (58.1 %, 16.8 %, and a marginal 2.6 %) and the
+        # top two are the two most accurate drives on record. It is also the first thing a starved
+        # front end loses, because decoding the 250 bit/s message needs a low-elevation satellite
+        # held continuously — so it leads the other channels rather than confirming them.
+        # This replaced `agcPercent`, which never left 6.81 % across a full day of A/Bs (display,
+        # camera, second Ethernet, modem, CPU clock) — it only ever moved when the LNA mode itself
+        # was changed, so it cannot report on anything else.
+        # TEMPORARY: "(debug enabled)" marks the SBAS test-mode experiment (CFG-SBAS-USE_TESTMODE on,
+        # 2026-09-29). Rename back to "Corrections" when the receiver default is reverted.
+        - variant: textData
+          title: Corrections (debug enabled)
+          channel: system.gps.dgpsOrBetter
+          decimals: 0
+          labelPosition: bottom
+          portraitSize: small
+          rewriteNumberAs:
+            "0": "NO"
+            "1": "YES"
+        # Raw ADC drive level out of 255, reported under its own name with no threshold. Both the
+        # friendly name and the warning were removed deliberately: they asserted a verdict this
+        # channel cannot support. magI sat at 200–217 while proto4 held a 0.56 m fix, and the one
+        # drive that pinned it at 255 produced the best C/N₀ of all 18. For reference rather than
+        # for alarm: 130–160 is the healthy band, u-blox call 200 close to saturation, and 255 is
+        # clipping. It does respond to a real change on one device — it moved 201 → 217 with the
+        # CPU clock on 2026-08-23 — which is the only way to read it.
+        - variant: textData
+          title: magI
+          channel: system.gps.magI
+          decimals: 0
+          labelPosition: bottom
+          portraitSize: small
+        - variant: textData
+          title: Fix
+          channel: system.gps.fixType
+          decimals: 0
+          labelPosition: bottom
+          portraitSize: small
+          rewriteNumberAs:
+            "0": "NO"
+            "1": "DR"
+            "2": "2D"
+            "3": "3D"
+            "4": "3D+DR"
+            "5": "TIME"
+        - variant: textData
+          title: GPS Hz
+          channel: system.gps.measuredHz
+          unit: Hz
+          decimals: 1
+          labelPosition: bottom
+          portraitSize: small
+          # A drive on 2026-08-19 logged at 7.7 Hz and nothing noticed; every statistic taken from
+          # it is thinned by a quarter. This is the one threshold on the page that flags a fact
+          # rather than an interpretation.
+          warnUnder: 8
+          warnColor: "#fb923c"
+  # Live GPS on a satellite still. Tap-gated so the debug page does not hit the imagery API until asked.
+  - id: debug-satellite-preview
+    widget: satellitePreview
+    gridClass: "min-w-0 max-w-full overflow-clip md:col-span-3"
+    params:
+      title: Satellite
+      latChannel: gpsLat
+      lonChannel: gpsLon
+      accuracyChannel: gpsHorizontalAccuracyM
+      # `zoom` is now the PAINTED ground resolution: the widget fetches at half size one zoom
+      # lower with scale=2 and paints 1:1, so 19 reproduces the framing the old cover-fit gave at
+      # 18. width/height are inert — the still is floored to the runway the motion model needs.
+      zoom: 19
+      # At 169 kph the car covers ~47 m during one imagery fetch, so the marker's worst-case offset
+      # from the still's centre is this threshold plus that travel. 45 m keeps it inside ~82% of the
+      # 141 m half-frame while cutting refreshes ~2.2x (1062 -> 487 over a 23 min deltahill run).
+      moveRefreshM: 45
+      requiresTapToActivate: true
+      # Esri explicitly: Google refuses satellite for EEA-billed accounts (403), so `auto` would
+      # only reach a working provider via the fallback change in satelliteImagery.ts. Naming it
+      # here means this page does not depend on that resolution order.
+      provider: esri
+  # Polar sky plot beside the map, same row, one quarter of the width: the only view that shows
+  # *where* the satellites are. A pattern hole from a mis-aimed antenna or an undersized ground
+  # plane is invisible in satsTracked and unmistakable here. Costs one string channel, not thirty.
+  - id: debug-sky-view
+    widget: skyView
+    gridClass: "min-w-0 md:col-span-1"
+    params:
+      title: Sky view
+      channel: system.gps.skyView
+      minCno: 20
+      showHeatmap: true
+  - id: debug-main
+    widget: debugChannelsTable
+    gridClass: "min-w-0 md:col-span-4"
+    params: {}
+  - id: debug-recordings-table
+    widget: liveRecordingsTable
+    gridClass: "min-w-0"
+    params:
+      title: Recordings
+      compact: true
+  - id: debug-session-laps-table
+    widget: sessionLapsTable
+    gridClass: "min-w-0"
+    params:
+      title: Session laps
+      compact: true
+  - id: debug-heart-rate-monitors-table
+    widget: heartRateMonitorsTable
+    gridClass: "min-w-0"
+    params:
+      title: Heart rate monitors

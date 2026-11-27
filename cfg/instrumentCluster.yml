@@ -1,0 +1,188 @@
+# Instrument cluster page — include from cfg/main.yml or cfg/praga.yml.
+# Channel order for each alias is defined in cfg/channelAliases.yml (top-level `channelAliases` in main.yml).
+#
+# Row 1 (both orientations) is a leading `auto` row for the warning banner: it collapses to nothing
+# until a rule trips, then the banner pushes everything below it down (see cfg/warnings.yml).
+#
+# Landscape: 12 cols × (banner + 4 rows).
+# Row 2: [gear | RPM] | [Δ lap delta | lap times table (optimal / best / last)].
+# Left (cols 1–5): mini metric tiles rows 3–5.
+# Right (cols 6–12): [inputs trace row 3 (`fillHeight`, same pattern as cfg/gps.yml) / G meter rows 4–5].
+#
+# [a | b] = one outline split by a divider (`dash-card-group`): the left/upper card reaches 1px into
+# its neighbour across the gap (`mr-[calc(1px-var(--icg))]`, `!h-[calc(100%+var(--icg)-1px)]` —
+# `!` because the dash pins every widget wrapper to height:100%), so both hairlines share a pixel.
+# `--icg` is the page gap; the joins follow it, so widening it only widens space between groups.
+#
+# Mobile portrait (phone-portrait, ≤600 px wide): 12 cols × (banner + 7 rows).
+# Row 2: gear (cols 1–6) | RPM (cols 7–12).
+# Rows 3–4: Δ lap delta (cols 1–6) | lap times table (cols 7–12) — 50/50, both span 2 rows.
+# Row 5: inputs trace (cols 1–12, full width).
+# Rows 6–8: mini metrics (cols 1–5) | G meter (cols 6–12).
+id: instrumentCluster
+contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full w-full min-h-0 min-w-0 grid-cols-12 grid-rows-[auto_minmax(min(60px,min(15vmin,12dvh)),max-content)_repeat(3,minmax(0,1fr))] phone-portrait:grid-rows-[auto_minmax(min(60px,min(15vmin,12dvh)),max-content)_minmax(min(60px,min(15vmin,12dvh)),max-content)_minmax(min(60px,min(15vmin,12dvh)),max-content)_minmax(0,0.8fr)_repeat(3,minmax(0,1fr))] [--icg:clamp(12px,min(3vw,3.5vmin),32px)] phone-landscape:[--icg:8px] gap-[var(--icg)] dash-card-group"
+widgets:
+  - !include warnings.yml
+  - id: ic-gear
+    widget: textDataGearMismatch
+    gridClass: "col-start-1 col-span-2 row-start-2 min-h-0 min-w-0 phone-portrait:col-span-6 mr-[calc(1px-var(--icg))]"
+    params:
+      title: Gear
+      targetChannel: gearTarget
+      channel: gearEngaged
+      format: gear
+      rewriteNumberAs:
+        "0": N
+        "12": R
+      emphasis: high
+      phoneLandscapeSize: large
+      labelPosition: bottom
+  - id: ic-rpm
+    widget: textData
+    gridClass: "col-start-3 col-span-2 row-start-2 min-h-0 min-w-0 phone-portrait:col-start-7 phone-portrait:col-span-6"
+    params:
+      title: RPM
+      channel: rpm
+      decimals: 0
+      emphasis: high
+      phoneLandscapeSize: large
+      labelPosition: bottom
+      # thresholdChannel: on the sim rig the brackets follow the self-learned limiter
+      # (simhubTelemetry.maxRpmLearned); the static threshold is the fallback on real cars.
+      colorRanges:
+        - threshold: 8200
+          thresholdChannel: simhubTelemetry.maxRpmLearned
+          thresholdChannelScale: 0.96
+          color: "#ef4444"
+        - threshold: 7800
+          thresholdChannel: simhubTelemetry.maxRpmLearned
+          thresholdChannelScale: 0.9
+          color: "#22c55e"
+        - threshold: 7400
+          thresholdChannel: simhubTelemetry.maxRpmLearned
+          thresholdChannelScale: 0.85
+          color: "#fbbf24"
+  - id: ic-delta
+    widget: lapDeltaBar
+    gridClass: "col-start-5 col-span-3 row-start-2 min-h-0 min-w-0 mr-[calc(1px-var(--icg))] phone-portrait:col-start-1 phone-portrait:col-span-6 phone-portrait:row-start-3 phone-portrait:row-span-2"
+    params:
+      title: "Δ Lap Delta"
+      # Names the lap the delta runs against, as on the overview (Settings → "Lap delta against").
+      titleChannel: system.LapTimer.deltaReference
+      titleMap: { optimal: "Δ Delta to optimal", best: "Δ Delta to best" }
+      channel: system.LapTimer.deltaEstim
+      decimals: 3
+      unit: s
+      range: 1.5
+      # Short top-row cell — keep the overview delta large; only this page uses compact type.
+      size: compact
+      # Stopped state (amber "STOPPED" sign) shows whenever the car stands (system.motion.stopped).
+  - id: ic-lap-times
+    widget: dataTable
+    gridClass: "col-start-8 col-span-5 row-start-2 min-h-0 min-w-0 phone-portrait:col-start-7 phone-portrait:col-span-6 phone-portrait:row-start-3 phone-portrait:row-span-2"
+    params:
+      # Short top-row cell: smaller numerals with room around each row (as the delta's `size: compact`).
+      size: compact
+      rows:
+        - label: Optimal
+          channel: system.LapTimer.refOptimalS
+          labelSuffixChannel: system.LapTimer.refWindow
+          labelSuffixMap: { daily: " · D", weekly: " · W", allTime: " · A" }
+          format: lapTime
+          lapTimeEmptyIfZero: true
+          decimals: 3
+          color: "#86efac"
+        - label: Best
+          channel: system.LapTimer.refBestS
+          labelSuffixChannel: system.LapTimer.refWindow
+          labelSuffixMap: { daily: " · D", weekly: " · W", allTime: " · A" }
+          format: lapTime
+          lapTimeEmptyIfZero: true
+          decimals: 3
+          color: "#c084fc"
+        - label: Last
+          channel: system.LapTimer.lastLapS
+          format: lapTime
+          lapTimeEmptyIfZero: true
+          decimals: 3
+          color: "#67e8f9"
+  - id: ic-temps-batt
+    widget: miniMetricsGrid
+    gridClass: "col-start-1 col-span-5 row-start-3 row-span-3 min-h-0 min-w-0 phone-portrait:row-start-6 phone-portrait:row-span-3"
+    params:
+      fitGridCell: true
+      items:
+        - title: Coolant
+          channel: coolantTemp
+          unit: °C
+          decimals: 0
+          icon: coolant
+          warnAbove: 100
+          warnColor: "#fb923c"
+        - title: Speed
+          channel: vehicleSpeed
+          unit: km/h
+          decimals: 0
+          icon: speedometer
+        - title: Air charge
+          channel: intakeAirTemp
+          unit: °C
+          decimals: 0
+          icon: airCharge
+        - title: Gearbox oil
+          channel: gearboxOilTemp
+          unit: °C
+          decimals: 0
+          icon: clutchOil
+          warnAbove: 100
+          warnColor: "#fb923c"
+        - title: Engine oil
+          channel: engineOilTemp
+          unit: °C
+          decimals: 0
+          icon: engineOil
+          warnAbove: 100
+          warnColor: "#fb923c"
+        - title: Battery
+          channel: batteryVoltage
+          unit: V
+          decimals: 1
+          icon: battery
+          warnUnder: 12.5
+          warnColor: "#fb923c"
+        - title: Fuel
+          channel: fuelLevel
+          unit: "%"
+          decimals: 0
+          icon: fuel
+          type: bar
+          barColor: "#d97706"
+          warnUnder: 15
+          warnColor: "#ef4444"
+        - title: Ambient
+          channel: ambientTemp
+          unit: °C
+          decimals: 0
+          icon: ambient
+  - id: ic-inputs
+    widget: inputsChart
+    gridClass: "col-start-6 col-span-7 row-start-3 row-span-1 min-h-0 min-w-0 !h-[calc(100%+var(--icg)-1px)] max-h-none phone-portrait:!h-full phone-portrait:col-start-1 phone-portrait:col-span-12 phone-portrait:row-start-5"
+    params:
+      throttleChannel: throttlePedal
+      brakeChannel: brakePressure
+      steeringChannel: steeringAngle
+      inputMin: 0
+      throttleMax: 100
+      brakeMax: 100
+      steeringRangeDeg: 360
+      fillHeight: true
+  - id: ic-gmeter
+    widget: gMeterWithInputs
+    gridClass: "col-start-6 col-span-7 row-start-4 row-span-2 phone-portrait:row-span-3 min-h-0 min-w-0 phone-portrait:row-start-6"
+    params:
+      title: ""
+      latChannel: accelLat
+      longChannel: accelLong
+      clampG: 5
+      showMaxEnvelope: true
+      resetMaxOnChangeOf: ""

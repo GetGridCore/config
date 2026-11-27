@@ -1,0 +1,29 @@
+# Weather forecast (Open-Meteo from live GPS) + ambient / intake temps.
+# Included from main.yml via `!include weather.yml`.
+id: weather
+contentGridClass: "col-span-2 row-start-1 row-span-1 grid min-h-0 min-w-0 grid-cols-4 grid-rows-[auto_max-content] gap-3 content-start max-md:col-span-1 max-md:grid-cols-1"
+widgets:
+  - id: weather-alias
+    widget: weatherForecast
+    gridClass: "col-span-4 row-start-1 w-full max-w-[min(100%,820px)] justify-self-start max-md:col-span-1"
+    params:
+      title: "Forecast · live GPS"
+      latChannel: gpsLat
+      longChannel: gpsLon
+      hours: 10
+  - id: weather-ambient-temp
+    widget: textData
+    gridClass: "col-start-1 row-start-2 min-w-0 max-md:col-start-1 max-md:row-start-2"
+    params:
+      title: Ambient
+      channel: ambientTemp
+      unit: °C
+      decimals: 0
+  - id: weather-intake-temp
+    widget: textData
+    gridClass: "col-start-2 row-start-2 min-w-0 max-md:col-start-1 max-md:row-start-3"
+    params:
+      title: Intake / charge air
+      channel: intakeAirTemp
+      unit: °C
+      decimals: 0

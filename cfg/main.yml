@@ -1,0 +1,610 @@
+# GridCore runtime config (canonical reference — README points here).
+# Load with CONFIG=<basename> (default main) → cfg/<basename>.yml from repo root.
+# Per-device changes: `runtime/configOverrides.yml` (same keys and shape as this file) is merged over it at
+# start — objects key by key, anything else replaced. The Settings page writes there (deploys replace cfg/,
+# never runtime/); it can also be edited by hand, taking effect at the next app start. With cloud sync the
+# file is mirrored to `{deviceId}/configOverrides.yml`; once per app run the copy with the newer
+# `overridesUpdatedAtMs` stamp wins (every Settings change stamps it; a file without one counts as oldest).
+# Use YAML `!include filename.yml` (paths under cfg/; `.yml` optional) to splice a fragment — e.g. one channel source
+# mapping, one page object, or `{ pages: [...] }` / a list of pages. Nested includes and circular detection supported.
+#
+# Top-level:
+#   drivers     — dashboard driver list (name, optional pfp URL) for the control bar and /driverSelect; not decoded CAN.
+#   channelAliases — short names → channel path lists for widgets, JSONL / `.ld`, and `/analyze` (see channelAliases.yml).
+#   mathChannels — (optional map, name → definition) channels computed from other channels, published as
+#                 `math.<name>` and normally reached through an alias (see mathChannels.yml). For combining
+#                 channels; a single channel's unit conversion is an `=` entry in its alias row instead.
+#                 Each is `percent: <channel>` as a share of `of: <channel>` or `of: [<channel>, …]`
+#                 (summed), × 100. Inputs take the same specs as a widget `channel:` — aliases, comma
+#                 fallbacks, `=120` constants. Optional `onlyWhen: { channel, atLeast }`: below `atLeast`
+#                 the value is not updated and holds its last reading. Recomputed whenever an input
+#                 updates; nothing is published while an input has no value or reads below 0 (a sensor out
+#                 of range), or the `of` sum is 0. A math channel cannot read another math channel.
+#   lapTimer    — GPS lap service; uses top-level `channelAliases` keys `gpsLat`, `gpsLon`, `gpsSpeedKph`, `gpsHorizontalAccuracyM`, `gpsSatellites` (paired order = source priority).
+#                 `dataLog.includeChannels` keys match `ui.channelSources[].key` (see `dataLog` comment block below).
+#                 `dataLog.logIn25Hz` (default **false**): Settings → Data logging → "Log at 25 Hz". When true,
+#                 the u-blox runs at 25 Hz and the session log / `.ld` follow at `hz` 25. Takes effect at the
+#                 next start (the Settings switch writes this key into runtime/configOverrides.yml).
+#                 `deltaReference` (default **best**): Settings → Device → "Lap delta against" — what the lap delta
+#                 (every page, and the video overlay) runs against: `best`, the reference window's best lap, or
+#                 `optimal`, its best sectors laid end to end (the lap table's "Optimal"). While the optimal
+#                 cannot be built yet (a sector with no timed lap through it) the delta runs against the best
+#                 lap. `system.LapTimer.deltaReference` names the lap in use — `optimal`, `best`, or `none`
+#                 before the first timed lap and on a lap joined mid-way (a virtual pace) — and the delta
+#                 widgets' titles show it. Applies from the next tick, no restart.
+#                 `referenceWindow` (default **daily**): Settings → Device → "Reference times" — how far back the
+#                 reference times (the lap tables' Best / Optimal, and the lap the delta runs against) reach on
+#                 the locked track: `daily` (today's laps), `weekly` (the last 7 days, today included) or
+#                 `allTime` (every session on the track). A point-to-point course never goes below `weekly`.
+#                 Laps from before the last "reset reference times" never count, whatever the window — the
+#                 green "Vehicle change detected" banner's Reset sets that moment (kept in
+#                 runtime/referenceTimesReset.json; it deletes nothing). `system.LapTimer.refWindow` names the
+#                 window in use (`none` before any reference lap). Applies at once, no restart.
+#   ui          — DBC/BLE/OBD sources, shell layout, dashboard pages and widgets.
+#   timezone    — (optional block) system timezone from GNSS position. Recording/session/log names use
+#                 device-local time, so a travelling device corrects its zone automatically.
+#                 `autoFromGps` (default **true** — omit the whole block to keep it on; `false` = off switch):
+#                 when ~10 min of good fixes all map to an IANA zone different from the current system zone,
+#                 apply it via `timedatectl set-timezone` + `process.env.TZ`. Applied ONLY while the video
+#                 recorder is idle and no track is locked, so local-time file names never switch zones
+#                 mid-session (otherwise the change stays pending / re-derives after reboot).
+#                 `override: <IANA zone>` (e.g. `Europe/Sofia`) pins the zone (still applied at the safe
+#                 boundary) and disables auto detection. Log-only (`[timezone] …`); no dashboard channels.
+#   display     — (optional block) built-in panel backlight. `brightness.auto` (default **true**) is the control
+#                 mode a device starts in until someone picks one on the settings page (auto or a manual
+#                 level, remembered across restarts in runtime/displayBrightness.json); `false` starts in
+#                 manual at whatever the panel shows. In auto, `brightness.dayPct` (default 100) and
+#                 `brightness.nightPct` (default 1) — percentages on a perceptual scale (50 % ≈ a quarter of
+#                 the panel's light, 20 % ≈ 4 %, 1 % ≈ its darkest usable glow) — are ramped
+#                 between through twilight by the SUN'S ELEVATION at the device's position (day from +6°,
+#                 night from -6°), so the switch follows the season and latitude. Position = GPS, else the
+#                 last saved fix, else the system timezone's city; there is no light sensor. Moving, or a modal open on the device's own screen → that level; parked and
+#                 unattended → the same level times `brightness.idleFactor` (default 0.7, clamped 0.2–1), so
+#                 a parked car is dimmer at night than at noon. While the battery runs the device (unplugged,
+#                 or on an input that cannot carry it) auto is capped at 50 % (parked: 50 × idleFactor); manual
+#                 is not. Brightening is immediate, dimming needs 30 s
+#                 stopped. Published on `system.display.*`; a device with no backlight node logs once and
+#                 does nothing.
+#   video       — (optional block) recording defaults. `quality` (default **720p**): `720p`, `1080p`, and on a
+#                 Camera Module 3 `720p50` / `1080p50` — capture size, recorded size and frame rate. `overlay`
+#                 (default **auto**): `auto` burns the data overlay in, `classic` / `charty` force one layout,
+#                 `off` records the clean feed. The Settings page's VIDEO card (and a manual start's quality, and
+#                 the camera dialog's overlay switch) save the choice into runtime/configOverrides.yml.
+#                 `VIDEO_OVERLAY=off` in the environment still turns the overlay off whatever this says.
+#                 `flip` (default **false**): `true` turns the camera picture 180° — the sensor reads out the other
+#                 way round, so it costs no CPU and applies from the next recording, no restart. It is relative to
+#                 how the board's camera is set up, not an absolute angle. Saved from the Settings page's
+#                 "Flip camera" switch; ignored where the camera software does not support it.
+#                 `fov` (default **full**): `full` records the camera's whole field of view, `zoom` its centre at 1.5×
+#                 (Camera Module 3: 66° → 47° across; the wide lens 102° → 79°) — for cabin cameras, and it also
+#                 meters exposure on the windscreen instead of the dark cockpit edges. `focus` (default **fixed**):
+#                 `fixed` holds the lens at 1 m, `auto` lets it refocus continuously. Both only on a Camera Module 3,
+#                 saved from the camera dialog's Edit; a change restarts a running recording to apply it.
+#                 `overlayChannels` (default **[lapDelta, bestLap, lastLap, gpsSpeedKph, heartRateBpm, coolantTemp,
+#                 engineOilTemp]**): the overlay's bottom data strip, in priority order. One row holds 5 cells
+#                 (4 with the pedal chart — which also leaves out `gpsSpeedKph`, already in its steering hub); a
+#                 channel without data reads `--` while the row has room. Past that, channels without data make
+#                 room from the end of the list, and only channels with data stack two high, up to 8 (7). The lap
+#                 cells always count as having data (`--` until the first lap) rather than appearing mid-video. Ids: lapDelta, bestLap, lastLap, gpsSpeedKph,
+#                 fuelLevel, coolantTemp, engineOilTemp, intakeAirTemp, gearboxOilTemp, ambientTemp,
+#                 heartRateBpm, brakeBiasPct, rpm, batteryVoltage. `brakeBiasPct` never shows as an empty
+#                 cell — only on cars that report or compute it. Applies from the next recording. Phone recording and video
+#                 imports always use the default strip.
+#                 `customLogo` (default **false**): `true` draws this device's own logo in the overlay where the
+#                 GridCore logo goes (the corner, or the slot under the tyre block) — in its recordings, phone
+#                 recordings and video imports made on it — once an image is uploaded. `customLogoImage`: the
+#                 uploaded image's id (`runtime/overlayLogo/<id>.png`); written by the upload, never by hand.
+#                 Both are saved by the Settings page's VIDEO card ("Custom logo in video overlay"), which also
+#                 takes the upload: a landscape PNG, JPEG or WebP, 2.5:1 to 7:1, at least 640 wide, at most
+#                 4096×4096 and 2 MB, kept whole. Alone in the corner it fills the corner's width; under the tyre
+#                 block it fits the GridCore lockup's box. Applies from the next recording.
+#                 `lapList` (default **false**): `true` shows a card at the right edge of the video, vertically
+#                 centred, with this session's last 5 laps (newest first, the best in purple, the newest with its gap
+#                 to the best before it) for the whole session on a closed circuit, from the first completed lap;
+#                 never on an open course or without a track. `dragWidget` (default **false**): `true` shows the same
+#                 corner during a hard launch from a stop (judged at 15 km/h: 12 km/h per second or more on average
+#                 from the stop, so an ordinary pull away never shows it), with 0–60 / 0–100 km/h and 200 m / 400 m
+#                 times as they come; when the car stops gaining speed, a run past 100 km/h keeps its times up for
+#                 10 s and any other run's card goes at once. On a track or off it alike — a hard pull out of a
+#                 pit box shows it up to the pit limiter. It takes the lap list's place while it is up. Both apply
+#                 at once, mid-recording, also to phone recordings; saved by the Settings page's VIDEO card. Video
+#                 imports never show them.
+#   overview    — (optional block) the overview page's layout; the Settings page's OVERVIEW card writes it.
+#                 `tpms` (default **whenAvailable**): the 2x2 tyre tiles — `whenAvailable` once any tyre reading
+#                 arrives, `always` (waiting tiles until then), `off`. `gMeter` (default **false**): a G meter
+#                 panel. `rpmBar` (default **false**): the RPM shift-light bar with the MAP / TC / ABS pills
+#                 across the top (shows only while something feeds it — SimHub by default). `layout` (default
+#                 **tpmsLeft**): `tpmsLeft` / `tpmsRight` — the TPMS side; the G meter
+#                 takes the other one, and the lap delta + lap table widen into any side not shown.
+#                 `lastLapFullScreenS` (default **0**): `3` or `5` — after each lap, the device's own screen
+#                 shows that lap (number, time, gap to the best before it) over the whole overview page for that
+#                 many seconds; a tap closes it early. `0` = off. Never on phones or the cloud, never on another
+#                 page, never for laps a resumed session restores.
+#                 `channels` (default **[fuelLevel, coolantTemp, engineOilTemp, intakeAirTemp, brakeBiasPct,
+#                 heartRateBpm]**): the bottom strip in priority order, fitted to 6 cells like
+#                 `video.overlayChannels` (an empty list → no strip). Ids: as for
+#                 `video.overlayChannels` minus the lap cells. Open dashboards re-lay out when it changes.
+#   debugPage   — (default **false**) whether the `debug` page (cfg/debug.yml: channel dump, GPS and recording
+#                 diagnostics) is part of the dashboard. Off, it is not in the page list at all, so neither the
+#                 page buttons nor a direct link reach it. The Settings page's INTERNAL FUNCTIONS → "Enable debug
+#                 page" switch saves this key into runtime/configOverrides.yml; open dashboards re-lay out at once.
+#   avgSpeedPage — (default **false**) whether the `avgSpeed` page (cfg/avgSpeed.yml: the `avgSpeedZone` widget for
+#                 average speed / section control zones, cfg/avgSpeedZones/*.json) is part of the dashboard, the same
+#                 way as `debugPage`, and only while `debugPage` is also on; the zones are only tracked
+#                 (`system.avgSpeed.*`) while the page is in. Settings → INTERNAL FUNCTIONS → "Enable average
+#                 speed page", shown only while the debug page is enabled.
+#   tpmsSensorIds — (optional map, corner → sensor id or list of ids) which Bluetooth tyre sensors sit on which
+#                 corner, e.g. `{ LF: "5BF82B" }` or `{ LF: ["5BF82B", "00F76D"] }` (one per wheel set; the same rule
+#                 as several ids in the mapping below). Overrides single corners of the `chineseBLETPMS` source's `mapping`
+#                 (which stays the default); ids are the 6 hex digits printed on the sensor. With an `auto` list in
+#                 the mapping, every wheel corner can be set here; a set corner takes its own sensor whenever that
+#                 sensor is being heard, and falls back to an auto sensor reporting that wheel after 5 minutes
+#                 without it. The Settings page's TPMS SENSORS card ("Assign IDs manually") writes it; changes
+#                 apply to the next broadcast, no restart.
+#   fuel        — (optional block) what the `fuel` widget and the `system.fuel.*` channels compute from the
+#                 `fuelLevel` alias, in its unit (% on most cars). `predictionLapWindow` (default **3**): laps
+#                 the measured consumption per lap averages over (two completed laps are needed before any
+#                 number shows). `calculatedLapConsumption` (default none): a fixed consumption per lap for the
+#                 second "laps left" figure ("calc laps left") — the one to trust early in a stint; without it that
+#                 figure is not shown. `reserveLaps` (default **2**): laps held back from both "laps left"
+#                 figures. The per-lap figures show only on a closed circuit. A refuel or a new session starts
+#                 the history over.
+#   power       — (optional block) automatic power-off, ONLY while the internal battery runs the device:
+#                 unplugged, or plugged into a supply too weak to carry it (a draining USB-C socket). Never
+#                 while a supply carries it, and never while moving.
+#                 `autoShutdown.onBatteryIdleMinutes` (default **10**; `0` = off, under 2 counts as 2): the
+#                 battery draining, parked (or no GPS speed at all) and not recording or running a GNSS self
+#                 check for this long → powers off. A supply that carries the device, moving, or starting a
+#                 recording or a self check restarts the clock. The last 60 s show a
+#                 countdown on the device's screen with a KEEP ON button, which turns it off until the car
+#                 next drives (the following stop arms it again). At a track (a track locked), on carriers
+#                 that can wake on motion (v2.9+, told apart by the 3.3 V always-on rail), this power-off
+#                 leaves wake on motion armed, so driving off starts the device again.
+#                 `usbCharger` — the USB-C charger (boards from v2.3; ignored on older ones). `chargeCurrentMa`
+#                 (default **2040**, max 3000): charge current from USB-C alone. `packMaxChargeMa` (default
+#                 **2400**, 1 C on the 2400 mAh pack): the most the battery may take from both chargers together —
+#                 with 12 V also connected (whose charger adds 1 A), USB-C charging is lowered to stay within it.
+#                 `autoWakeNearTrack` (default **false**): when powered off by hand on external power, the device
+#                 wakes by itself to check whether the car is near a closed circuit (stays up if it is under
+#                 20 min away at 100 km/h, else sleeps the drive time — at least 20 min, at least 1 h when
+#                 parked or indoors). The Settings page's "Auto wake up near a track" switch saves this key
+#                 into runtime/configOverrides.yml.
+#   videoUpload — (optional block) when onboard video may upload.
+#                 `uploadOnMobile` (default **true** — omit it to keep it on; `false` = off): whether video may
+#                 upload over mobile data at all. Off = only over Wi-Fi or a cable. Which Wi-Fi networks carry
+#                 video is set per network (Settings → Wi-Fi, "upload video"). Takes effect at the next start.
+#                 `onlyUploadOnStationary` (default **true** — omit the block to keep it on; `false` = off):
+#                 over mobile data, video uploads only while the car is stopped (GPS speed at or under
+#                 3 km/h; no speed reading counts as not stopped). Wi-Fi and a cable are never held. Session
+#                 logs still upload while moving. The Settings page's VIDEO → UPLOAD switch ("Live, while
+#                 driving" = `false`) saves this key into runtime/configOverrides.yml.
+#   canDump     — (optional block) the raw CAN capture. Every frame on every CAN bus is always saved under
+#                 `candumps/`, gzipped as it is written, one file per bus per 10 minutes; the oldest files are
+#                 deleted once they pass ~1.5 GB (files already in the cloud first). There is no key to stop
+#                 saving (`CAN_DUMP=0` in the environment skips it, for bench replays).
+#                 `upload` (default **true**; anything but true/false counts as true): with cloud sync, each
+#                 finished 10-minute file is backed up to the cloud — only one that holds the car's own
+#                 broadcast traffic (at least 100 frames that are not OBD-II/UDS diagnostics); a file with
+#                 nothing but OBD-II requests and replies stays on the device. Never over mobile data — CAN
+#                 files wait for Wi-Fi or a cable. The Settings page's DATA LOGGING → "Upload raw CAN data"
+#                 switch saves this key into runtime/configOverrides.yml and applies at once.
+#   diagnostics — (optional block) the car's stored fault codes (DTCs). `autoClearDtcs` (default **false**): every OBD
+#                 source that reads DTCs clears the engine ECU (0x7E0) and gearbox TCU (0x7E1) whenever its last read
+#                 found codes on them — no other control unit is ever cleared. The Settings page's VEHICLE DIAGNOSTICS
+#                 switch saves this key into runtime/configOverrides.yml and applies at once; its "Clear now" button
+#                 clears both once, through every OBD source that has the car's attention right then.
+#   canBuses    — the wired CAN buses by speed: `<bus id>: <bit/s>` (e.g. `can0: 500000`). Either car port works
+#                 for either bus. A port stays silent on the wire — it does not even acknowledge frames — until it
+#                 has worked out the speed of what is plugged into it: from the traffic it hears, or, on a bus that
+#                 says nothing until asked (an OBD-II port), from the reply to one harmless request. It then joins
+#                 the bus listed at that speed. A bus at a speed not listed here is left alone. Only one bus per
+#                 speed: a second bus at the same speed waits, listening, until the first one goes quiet. A bus id
+#                 used in `ui.channelSources` but missing here never connects. Linux only — a USB adapter on
+#                 macOS/Windows sets its own speed (`CAN_INIT_COMMANDS`).
+#
+# ui.channelSources — each entry is one decode namespace (`key.` prefix on channel names):
+#   source types: CAN (parsed via DBC), OBD-II (requires CAN bus), bluetooth-ble (hardcoded data sources for now)
+#   Arguments: 
+#   * bus: logical CAN id — one of `canBuses` (Linux: carried by whichever car port proves its speed) or any label;
+#     on macOS/Windows all labels share one USB adapter.
+#     Linux: if `bus` starts with `can` and `/dev/<bus>` exists (e.g. `can500baud` → `/dev/can500baud`), that serial device is used instead.
+#   * bus: bluetooth-ble — BLE sources (alias `ble` internally).
+#   * file: DBC file name under cfg/dbc (or absolute path) - only required for CAN sources
+#   * forward: (optional) send matching traffic to a CAN bus
+#     `toBus` — another logical CAN id from your sources; must not equal this source’s `bus` (same bus would loop).
+#     `channelFilter` — optional; full channel path or `prefix*`; omit to forward everything that applies.
+#     `outputFormatDbc` — optional DBC under cfg/dbc (or absolute path). If set, outgoing frames follow that DBC; if omitted on a CAN+DBC source, the raw RX frame is retransmitted.
+#     Per-frame TX logs (`[can broadcast] forward …`): off by default; set `LOG_CAN_BROADCASTS=1` to enable.
+#   All source types:
+#   • onlyIfVehicle / onlyIfNotVehicle / onlyIfVehicleKnown — optional on **every** source type (CAN, OBD, BLE, …).
+#     The first two take a vehicle profile id or a list (`mclaren`, `bmwG`, `cayman`, `praga`, `obd2`):
+#     `onlyIfVehicle` = run only on these, `onlyIfNotVehicle` = run on everything except these. The active vehicle
+#     is `VEHICLE=` at launch, else whatever `useToDetectVehicle` (below) works out from the bus; all three gates
+#     read `system.currentVehicle`.
+#     **An undetermined vehicle means "every profile", so it opens every id gate.** That is the general rule and it
+#     is what keeps dev / multi-car benches decoding everything (and gives vehicle detection traffic to work from).
+#     `onlyIfVehicleKnown: true` is how one source opts out of that rule and waits to be told which car it is on —
+#     the only gate that talks about the undetermined state itself rather than about an id.
+#     Two separate effects, because a passive DBC decoder and an active OBD/UDS poller need different answers:
+#       — Loading. With `VEHICLE=` set, a source excluded by an id gate is **not** loaded at all. With `VEHICLE`
+#         unset, every source is loaded regardless — `onlyIfVehicleKnown` included, since it must be present to
+#         start once the car is named. It never affects loading, only transmitting.
+#       — Transmitting (OBD/UDS sources only). Re-checked on **every poll pass**, so detection naming the car
+#         mid-session hands the bus over with no restart. A paused poller logs
+#         `[OBD2] '<key>' OBD paused reason=vehicle …`, and `OBD resumed` when the gate opens.
+#     Sharing one bus between a car-specific source and a generic fallback is the reason all three exist: pair
+#     `onlyIfVehicle: <car>` + `onlyIfVehicleKnown: true` on the specific one against `onlyIfNotVehicle: <car>` on
+#     the fallback, and exactly one of them is open for every possible value including undetermined. Drop the
+#     `onlyIfVehicleKnown` and they instead overlap until detection concludes — survivable (see below) but noisy.
+#     Overlap is bounded, not fatal, if you do allow it: replies are matched by the PID echoed in the response and
+#     only written to channels that source actually asked for, so a reply arriving at the wrong source yields a
+#     cooled-off PID rather than a wrong value. Both must be single-frame (`obdMode01BatchSize: 1`, the wired
+#     default) — two testers exchanging multi-frame replies would also trade ISO-TP flow-control frames, which is a
+#     documented way to make a gateway stop answering.
+#     Launch: `VEHICLE=mclaren npm start` pins McLaren decode/diag sources and sets `system.currentVehicle`.
+#   • useToDetectVehicle — `<vehicleId>,<percent>` (e.g. `mclaren,80%`), on a CAN+DBC source. Identifies the car from
+#     its own traffic when `VEHICLE=` is **unset**: once at least `percent` of the messages that source's DBC defines
+#     have decoded at least once, the active vehicle latches to that id and every gate above follows. `VEHICLE=`
+#     always wins (detection does not even start). The latch is deliberate — one bus does not change cars, and a
+#     detector able to un-name the vehicle would hand the bus back and forth on a transient.
+#     Picking the percent: it is a share of **that DBC's message list**, so it depends on how complete and how
+#     verified the DBC is, not just on the car — the same number means different things across two files. Two
+#     bounds to sit between, both checked by `src/config/vehicleDetectController.test.ts`:
+#       — Upper: the threshold must be **crossable**. Discount every message that cannot appear on the bus this
+#         source taps — a `__UNSURE` name (presence unverified), or one the DBC header assigns to another bus
+#         (the `_KCAN` messages in bmwGSeries are on a 100 kbit/s body bus, not the 500 kbit/s PT-CAN). 100% is
+#         essentially never reachable: `mclaren_720s.dbc` defines a message no capture of ours contains.
+#       — Lower: stay well clear of what the DBC scores on **another car's** traffic. 11-bit ids collide freely
+#         across makes; porsche_718 reads 28% and bmwGSeries 12% on a McLaren bus.
+#     Shipped values and why they differ: mclaren 80% (measured 95% over five captures, 3 messages of slack),
+#     cayman 60% (ceiling 72% — 5 of 18 unverified), bmwG 70% (ceiling 88% — 3 of 26 on another bus). Prefer
+#     measuring against a real capture over inferring from the file; the two inferred numbers above are the
+#     conservative reading and should be re-derived once a capture from either car exists.
+#     First source past its threshold wins, so list the most specific profile first.
+#   • CAN + DBC — just specify `file`, pointing to cfg/dbc (or absolute path)
+#     channel IDs look like `${fileName}.${messageName}.${signalName}`
+#
+#   • OBD-II — you bind this to a CAN bus (using `bus: can0` or `bus: can1`) and it **reads OBD2 live data** specified in `fromObd2`
+#
+#     It can also **read UDS extended (manufacturer) channels**, **read stored DTCs**, and
+#     **auto-clear the ECU/TCU DTCs** (the device-wide `diagnostics.autoClearDtcs` switch; only on sources that read DTCs).
+#
+#     Channels (prefix each path with your source `key.`):
+#       — **OBD2:** `<key>.<signal>` — one live value per name in `fromObd2` (e.g. `engineRpm`, `fuelLevel`).
+#       — **UDS:** `<key>.uds.<name>` — one value per row in `customUDSChannels`.
+#       — **DTCs:** `<key>.totalNumberOfDTCs`, `DTCsAtLastRead`, `uniqueDTCsSeen`, `lastSuccessfulDTCReadTs`, and clear-related
+#         fields when auto-clear is on — see docs/obd2-channel-source.md for the full set.
+#
+#     The runtime uses **one queue**, **one request at a time**. Your OBD2 and UDS items run first, in config order.
+#     **Reading DTCs happens at the end of the queue**, after the live data. If you use auto-clear, that runs **right before**
+#     the DTC read in that same step.
+#
+#     After each full pass it waits **`waitBetweenPolls`** ms (default 200). Channel `<key>.lastPollTimeMs` is how long the run took.
+#     `obdAddressing`: `11` (default), `29`, or `auto`. Some vehicles answer diagnostics on longer CAN addresses;
+#     `auto` tries the usual short address first, then the long one, and keeps whichever replies (wired CAN only).
+#     For full options (IDs, timeouts, bus-quiet gate, ...) -> SEE docs/obd2-channel-source.md.
+#
+#     Minimal example (comment-only — paste under `ui.channelSources` and adjust `key` / `bus`):
+#       # - key: obd
+#       #   bus: can0
+#       #   fromObd2: [engineRpm, fuelLevel]
+#       #   readDTCs: true
+#
+#   • can-bluetooth — `bus: can-bluetooth`; no DBC file. Backed by a Bluetooth ELM327/STN dongle (Vgate vLinker MC+ is the
+#     reference device). Auto-discovered: the first BLE peripheral whose name contains `vlinker` / `veepeak` / `obdii` is used;
+#     no MAC pairing or YAML id required. The OBD2 / UDS / DTC fields (`fromObd2`, `customUDSChannels`, `readDTCs`,
+#     `extendedSession`, `onlyIfBusNotSilent`, `responseTimeoutMs`, …) all work the same as on a wired
+#     CAN source. Power on **one** Bluetooth OBD dongle at a time. Channels are `<key>.<signal>` and `<key>.uds.<name>`.
+#     **Diagnostics-only** by design — between requests the dongle sits at the ELM prompt; no live CAN sniffing. (Modern car
+#     OBD buses are too busy to combine sniffing with polling over a BLE pipe; use a wired adapter if you need a CAN sniffer.)
+#     The OBD2 runtime auto-bumps `responseTimeoutMs` to 800 ms for `bus: can-bluetooth` to cover BLE round-trip cost; set
+#     it explicitly to override. Mode 01 PIDs are batched up to 6 per request (SAE J1979 max — `obdMode01BatchSize: 6`
+#     auto-default for `bus: can-bluetooth`, `1` for wired CAN); set `obdMode01BatchSize: 1` to disable batching if a
+#     quirky ECU rejects multi-PID requests. Add `preferredId: <peripheral-id>` (string or list) to pin a specific dongle when several
+#     vLinkers might be in range — any other matching dongle is still accepted as a fallback if the preferred one is
+#     absent. The id is the platform-specific token logged on first connect: an opaque CoreBluetooth UUID on macOS
+#     (Apple hides the real MAC) vs the actual BLE MAC on Linux/Pi — the two are **not** interchangeable, so list both
+#     when the same config is used cross-platform. See `cfg/genericDiag.yml` for a worked Bluetooth OBD-II example.
+#     On Linux/Pi where this source coexists with a Bluetooth TPMS / RaceBox source on the same radio, launch the
+#     app with BOTH `NOBLE_MULTI_ROLE=1` (lets the radio keep scanning while connected) AND
+#     `NOBLE_REPORT_ALL_HCI_EVENTS=1` (surfaces every advertisement immediately instead of waiting for a second
+#     sighting — required for sparse TPMS broadcasts to come through reliably in motion). No effect on macOS.
+#
+#   • kline-ds2 — `bus: kline-ds2`; no DBC file. Older BMWs' engine computer (DME) read over the K-line (OBD pin 7)
+#     with BMW's DS2 protocol through a wired USB adapter. Read-only: only identification and the status blocks
+#     can be requested; nothing that clears fault codes or changes the ECU can be configured or sent. Worked
+#     example (Bosch M5.2, E36 318ti): `- !include ds2M52.yml`. Keys of the `ds2:` block:
+#       `adapter`  — `stn` (OBDLink EX and other STN-chip USB adapters; a plain ELM327 cannot do DS2's even
+#                    parity) or `openport` (Tactrix OpenPort 2.0).
+#       `device`   — `auto` (default: finds the adapter by its USB id), `vid:pid` or `vid:pid:serial` (e.g.
+#                    `0403:6015:223230303624`), or a fixed path such as `/dev/serial/by-id/usb-…`.
+#       `ecuAddress` (default 0x12, the DME), `responseTimeoutMs` (default 300: wait for the ECU to start
+#       answering), `interRequestGapMs` (default 10: pause between one reply and the next request),
+#       `fastHz` (default 10) / `slowHz` (default 1): request rates of the two telegram groups — one request
+#       at a time, so the bus sets the real rate; a due slow telegram goes before the next fast one.
+#       `maxConsecutiveFailures` (default 3): failed exchanges in a row before the link counts as down and the
+#       ECU is identified again.
+#       `telegrams` — list of `{ name, request: [bytes after address+length], group: fast|slow,
+#       replyDataLength, fields: [...] }`. A request outside the read allowlist (`[0x00]`, `[0x0B, 0x03]`,
+#       `[0x0B, 0x04]`) stops the source from loading. `replyDataLength` = data bytes after the 0xA0
+#       acknowledge; a reply of any other length is ignored. Each field `{ name, byte, type, bit, mul, add }`
+#       becomes `<key>.<name>` = raw × mul + add; `byte` counts from the first byte after 0xA0; `type` is
+#       u8, s8, u16be, u16le, s16be, s16le or bit (with `bit: 0–7`).
+#     Status channels: `<key>.linkUp` (1 while the ECU answers), `ecuIdent`, `adapter`, `roundTripMs`,
+#     `fastHz` (fast-group passes per second), `failures`. The ECU only answers with the ignition on; with it
+#     off the source keeps retrying quietly.
+#
+#   • bluetooth-ble — `bus: bluetooth-ble`; no DBC file. The source `key` is usually `chineseBLETPMS` (TPMS) or `racebox`
+#     (wildcard RaceBox capture). Optional `mapping` maps BLE sensor hex ids to tire corners (LF, RF, …).
+#
+#     chineseBLETPMS (with mapping): for each mapped corner, advertising decodes into
+#       `<key>.<corner>.pressureBar` and `<key>.<corner>.tempC`. Three sensor families are understood and can be
+#       mixed in one mapping: the FBB0-service sensors, the `TPMS<n>_<id>` sensors (id = the 6 hex digits after
+#       the underscore in the sensor's Bluetooth name), and the B08 iBeacon sensors (id = the device address as
+#       6 hex digits, e.g. "00F76D"). A `TPMS<n>` sensor stays silent until its tyre is inflated
+#       above about 1 bar, so pair it on an inflated tyre.
+#       `TPMS<n>` sensors also give `<key>.<corner>.batteryPct` (0–100); a `tire` widget shows it with
+#       `batteryChannel: chineseBLETPMS.<corner>.batteryPct` + `batteryUnit: "%"` (low at `batteryWarnPct`, default 15;
+#       without `batteryUnit` the channel is read as volts, low at `batteryWarnV`).
+#       `auto` (optional, in the mapping next to the corners): sensor ids, comma-separated or a list, each placed on
+#       the wheel the sensor reports itself (`TPMS<n>` family only: TPMS1 = LF, 2 = RF, 3 = LR, 4 = RR). Quote ids.
+#       Listing is only a preference now (rule below): unlisted `TPMS<n>` sensors are placed too.
+#         mapping:
+#           - LF: "5BF82B"                    # pinned: wins while it is being heard
+#           - RF: "5B9218, 00F73A"            # several pinned (one per wheel set): comma-separated or a list
+#           - auto: "410A38, 410A39, 410A3A"  # the rest go where they say
+#       A pinned sensor ignores what it reports. Any other sensor that reports its own wheel (`TPMS<n>`) is placed
+#       there, listed in `auto` or not — a new set needs no ids. A sensor takes a pinned corner only while the
+#       pinned sensor has not been heard for 5 minutes (or not at all since start), and gives it back once it is.
+#       FBB0- and B08-family sensors report no wheel and must be pinned. With several ids pinned to one corner, only
+#       one writes it: the one holding it keeps it while heard within 5 minutes, unless another is heard more than
+#       6 dB stronger (no signal strength: the first listed wins). If several sensors report the same wheel (a second
+#       set in range, a car alongside), the one holding it keeps it unless another is heard more than 6 dB
+#       stronger — the nearer sensor is on this car; with no signal strength to compare, a listed sensor beats an
+#       unlisted one and the first listed wins. A holder silent for a minute gives the wheel up. Any wheel corner
+#       can be pinned on the Settings page.
+#     With **forward** and e.g. `outputFormatDbc: BLE_TPMS_forward.dbc`, values are encoded onto the target bus from that DBC.
+#
+#     racebox (no mapping): first BLE id whose name contains "racebox" is used; additional units log a warning and are
+#       ignored until disconnect (or failed connect) clears the selection. Flat channels under `<key>` only:
+#       `<key>.deviceName` (string), `<key>.lastSeenTsMs`, `<key>.batteryStatus`, `<key>.gnssFixOk` (0/1 from fix flags),
+#       `<key>.nav.*` (position/speed/heading/accuracies, `gForce*`, `numSVs`, `precisionDilusion`, `timeUtc`). Raw GATT/advert dumps are not
+#       written to channels; set env `RACEBOX_DEBUG=1` for readable console logs instead.
+#
+#     alsTireBle (`bleProtocol: alsTireBle`): Alsense / CANchecked TMB/BMB IR temps over GATT (connect + notify).
+#       Without `mapping`, each sensor is exposed under its MAC suffix from the BLE name (`alsTireBle.31f7b5.*`).
+#       With `mapping`, keys are arbitrary labels (tire, brake, etc.) → BLE id (6-char MAC suffix or full peripheral id):
+#         FL: "94DFA5"
+#         brake_fr: "A1B2C3"
+#       Per sensor: `<key>.<id>.tempCh1|tempCh2|tempCh3|tempCAvg|batteryPct|position|deviceName`.
+#       `simpleTire` multi-channel: set `multiTempChannelPrefix: alsTireBle.fl` (+ optional `multiTempChannelCount: 3`)
+#       to render the IR strip heatmap; pressure still comes from `pressureChannel`.
+#
+#     bleHeartRate (no mapping): standard Bluetooth Heart Rate service (0x180D). First monitor in range whose
+#       advertisement lists service 180D or whose name looks like a chest strap (Coospo, Polar, Garmin, …) is
+#       connected; additional units are ignored until disconnect. Add `preferredId: <peripheral-id>` (string or
+#       list) to pin a specific strap when several monitors might be in range — any other matching monitor is
+#       still accepted as a fallback if the preferred one is absent. The id is the platform-specific token
+#       logged on first connect (CoreBluetooth UUID on macOS, BLE MAC on Linux/Pi — list both when sharing this
+#       config cross-platform). Channels: `<key>.bpm`, `<key>.deviceName`, `<key>.deviceId`, `<key>.isConnected`
+#       (0/1 GATT link state), `<key>.lastSeenTsMs`, `<key>.sensorContact` (0/1 when the strap reports contact).
+#       `<key>.detectedMonitorsJson` is a JSON-array census of every monitor advertising in range (each entry
+#       has `id`, `name`, `rssi` dBm, `lastSeenTsMs`), regardless of which one is connected — handy as a
+#       driver-detection beacon (see the Heart rate monitors table on /debug). Entries drop off ~30 s after a
+#       monitor stops advertising.
+#       The last received `bpm` is kept after disconnect; widgets use `textData` `recencyChannel` /
+#       `recencyThresholdS` to highlight stale data. Alias `heartRateBpm` in channelAliases.yml for widgets and
+#       session logs.
+#
+#
+# ui.globalLayout — Tailwind classes for the outer shell: root grid + shared footer.
+# Recording defaults (see header); the Settings page overrides them per device.
+video:
+  quality: 720p
+  overlay: auto
+# Overview page layout (see header); the Settings page overrides it per device. The strip lists
+# (`overview.channels`, `video.overlayChannels`) default as documented in the header.
+overview:
+  tpms: whenAvailable
+  gMeter: false
+  rpmBar: false
+  layout: tpmsLeft
+# The debug page (see header); the Settings page's "Enable debug page" switch overrides it per device.
+debugPage: false
+# The average speed zone page (see header); the Settings page's "Enable average speed page" switch overrides it.
+avgSpeedPage: false
+# Automatic power-off on the internal battery (see header). Omit the block for the same defaults.
+power:
+  autoShutdown:
+    onBatteryIdleMinutes: 10
+  usbCharger:
+    chargeCurrentMa: 2040
+    packMaxChargeMa: 2400
+  autoWakeNearTrack: false
+# Video may use mobile data (uploadOnMobile), but only while the car is stopped
+# (onlyUploadOnStationary; Wi-Fi and a cable are never held). See the header.
+videoUpload:
+  uploadOnMobile: true
+  onlyUploadOnStationary: true
+# Raw CAN is always saved (see header); upload = cloud backup of broadcast-traffic dumps (Settings switch), Wi-Fi or a cable only.
+canDump:
+  upload: true
+# Clear the ECU/TCU fault codes automatically (see header; the Settings switch).
+diagnostics:
+  autoClearDtcs: false
+# Wired CAN buses by speed (see header) — either car port works for either bus.
+canBuses:
+  can0: 500000
+  can1000: 1000000
+drivers: !include drivers.yml
+# Raw JSONL: append-only `datalog/rawLog-{launchTimestamp}.jsonl.gz` per run of the software.
+# Starts immediately on app launch (no GPS required). While stationary (rounded GPS speed ≤ 3 km/h),
+# only writes every Nth JSONL row (`stationaryDerateFactor`); always records at full `hz`.
+# `.ld`: `{track}-{sessionTimestamp}.ld` — starts when a track is selected AND the car is moving; always
+# records at `hz` (no subsampling). Pauses after `ldStopAfterStationarySeconds` of continuous stationary.
+# Rows follow the GNSS receiver's fixes — one row per 1/`hz` of fix time, so row k sits at k / `hz` (how
+# MoTeC i2 and Lapwing time an `.ld`). An instant without a fix repeats the previous `.ld` row; with no fixes
+# at all, rows come from the device clock.
+# New file on track change, row cap, or after a stationary pause when movement resumes.
+# Video (when a camera is detected): commanded by the lap timer — starts/stops with `.ld` sessions.
+# A manual start from the dashboard is stopped the same way, so it only survives a long stop in
+# free-roam: no track locked → no `.ld` session → no stationary pause to end it.
+lapTimer:
+  # Settings → "Lap delta against" (see header): best | optimal.
+  deltaReference: best
+  # Settings → "Reference times" (see header): daily | weekly | allTime.
+  referenceWindow: daily
+  dataLog:
+    # When logging is on, `channelAliases` must define `gpsLat`, `gpsLon`, and `gpsSpeedKph`
+    enabled: true
+    hz: 10
+    # Settings → Data logging → "Log at 25 Hz". When true, the u-blox and the session log run at 25 Hz
+    # (overrides `hz` above). Takes effect at the next start. Absent / false = the `hz` above (10).
+    logIn25Hz: false
+    # When rounded GPS speed ≤ 3 km/h, only write the raw JSONL every Nth tick (e.g. 10 → ~1 Hz). Does NOT affect .ld rate (always `hz`). Set to `1` to disable throttle.
+    stationaryDerateFactor: 10
+    outputDir: datalog
+    # Pause export after this many seconds of continuous GPS-stationary (rounded km/h ≤ 1), not
+    # immediately when you stop. Ends the video recording too, including a manually started one.
+    ldStopAfterStationarySeconds: 300
+    # logAliasUnderlyingChannels: when channel aliases are defined, the alias is always included in .ld exports, but the underlying channels its sourced from are skipped; set this to true to include them
+    # Optional: which decoded paths to include per `channelSources` key (not `system.*`, not channelAliases columns).
+    # Values: everything | nothing | "prefix:SomePrefix" | "list:path.one,path.two"
+    # If a source has no entry here, include every such path (default: everything).
+    # Example:
+    # includeChannels:
+    #   aim: "prefix:aim.AIM_"
+    #   ttpms: "list:ttpms.SomeMessage.SomeSignal,ttpms.Other.OtherSignal"
+    includeChannels:
+       racebox: nothing
+    # Optional: JSONL `{"m":{...}}` rows → `.ld` footer `##TelemetryLdMarker:v1` (lap times + channel changes).
+    stringChannelsToLogAsMarkers:
+      - system.appVersion
+      - system.wifiSSIDName
+      - bleHeartRate.deviceId
+      - system.currentDriver
+      - system.currentVehicle
+      - system.vin
+      - system.vehicleMake
+      - system.vehicleModelYear
+      - system.videoWeather
+      # What the lap delta ran against (optimal | best | none) — Settings → "Lap delta against".
+      - system.LapTimer.deltaReference
+      - mclarenDiag.DTCsAtLastRead
+      - mclarenDiag.lastDTCClearModule
+      - genericDiagCAN.DTCsAtLastRead
+      - genericDiag.DTCsAtLastRead
+      # Sim rig metadata (SimHub MQTT source; inert without SIMHUB_MQTT_* env vars).
+      - simhubTelemetry.gameName
+      - simhubTelemetry.trackName
+      - simhubTelemetry.carModel
+      - simhubTelemetry.sessionTypeName
+
+# Global channel aliases — widgets may use bare names (e.g. `channel: rpm`); expand here with more fallbacks.
+# Session JSONL / .ld always writes one column per alias key here (resolved value or null); not affected by lapTimer.dataLog.includeChannels.
+channelAliases: !include channelAliases.yml
+mathChannels: !include mathChannels.yml
+
+ui:
+  # FYI: praga conflicts with McLaren, also TTPMS conflicts with McLaren. They're on different speeds anyway (canBuses), McLaren is the only one at 500
+  channelSources:
+    - key: mclarenlife
+      file: mclaren_720s.dbc
+      bus: can0
+      onlyIfVehicle: mclaren
+      useToDetectVehicle: mclaren,80%
+    - !include mclarenDiag.yml
+    - !include genericDiagCAN.yml
+    - !include genericDiag.yml
+    - key: ttpms
+      file: official/IZZE_TTPMS.dbc
+      bus: can1000
+    - key: aim
+      file: aim/AiM_CAN_Output_custom.dbc
+      bus: can1000
+    - key: praga
+      file: Praga_R1T_EVO_OmegaCAN.dbc
+      bus: can1000
+    # Metis Engineering analog-to-CAN module (ADCANMODG2): 8 × 0–5 V, IDs 0x320–0x325. It ships at
+    # 500 kbps — set it to 1000 kbps to join this bus. Brake pressure sensors: front A6, rear A5
+    # (`brakePressureFront` / `brakePressureRear` in channelAliases.yml).
+    - key: analogCan
+      file: official/Metis_AD8ch_v1pt7.dbc
+      bus: can1000
+    - key: steeringWheel
+      file: official/CFW277_SteeringWheel.dbc
+      bus: can1000
+    - key: cayman
+      file: porsche_718.dbc
+      bus: can0
+      onlyIfVehicle: cayman
+      # 60%, not 80%: 5 of this DBC's 18 messages are `__UNSURE` (presence on Drive CAN unverified — one,
+      # TPMS_MMI, is confirmed to be on a different bus entirely), so only 13 are certain to appear and the
+      # ceiling is 72%. 60% needs 11 of those 13. The 5 that collide with McLaren ids are all *verified*
+      # messages, so lowering to 60% keeps a 32-point margin over the 28% this DBC scores on McLaren traffic.
+      useToDetectVehicle: cayman,60%
+    - key: bmwGSeries
+      file: reversed/bmwGSeries.dbc
+      bus: can0
+      onlyIfVehicle: bmwG
+      # 70%, not 80%: 3 of 26 messages are the K-CAN body bus (100 kbit/s), which cannot appear on the
+      # 500 kbit/s PT-CAN this source taps — see the DBC header. Ceiling is 88%; 70% needs 19 of the 23
+      # reachable, and sits 58 points above the 12% this DBC scores on McLaren traffic.
+      useToDetectVehicle: bmwG,70%
+    # BMW DS2 engine data over the K-line (E36 318ti, Bosch M5.2) through a USB OBDLink EX. Idle on every
+    # other car: it only polls once that adapter is plugged into the One.
+    - !include ds2M52.yml
+    #- key: alsTireBle
+    #  bus: bluetooth-ble
+    #  bleProtocol: alsTireBle
+    #  # Temporary: single sensor on FL for multi-channel tire widget bring-up.
+    #  mapping:
+    #    - FL: "94DFA5"
+      # mapping:
+      #   - tire_fl: "31F7B5"
+      #   - brake_fr: "A1B2C3"
+    - key: chineseBLETPMS
+      bus: bluetooth-ble
+      forward:
+        toBus: can0
+        channelFilter: "chineseBLETPMS.*"
+        outputFormatDbc: BLE_TPMS_forward.dbc
+      mapping:
+        - LF: "00F76D"
+        - RF: "00F73A"
+        - LR: "00F78E"
+        - RR: "00F792"
+        - auto: "0E609E, 410A19, 410A28, 410A38"
+    - key: racebox
+      bus: bluetooth-ble
+      # Future optional binding (like BLE TPMS):
+      # mapping:
+      #   - id: "RACEBOX_DEVICE_ID_OR_MAC"
+    - key: bleHeartRate
+      bus: bluetooth-ble
+  # Root grid for all pages (Tailwind). Columns only — the row template is owned by the app shell
+  # (a single row that fills the viewport below the control bar and grows when a page is taller);
+  # do not put grid-rows-* here.
+  globalLayout:
+    rootGridClass: "max-md:grid-cols-1"
+  # Dashboard routes; first page id is the default /. Each widget: id, widget, gridClass, params.
+  # IMPORTANT: every Tailwind class used in rootGridClass / contentGridClass / gridClass must exist in
+  #   the compiled dashboard CSS. The build scans cfg/**/*.yml, so a class first introduced by editing
+  #   YAML on a device (without `npm run build:dash`) silently has no CSS and the layout collapses.
+  # Page fields: id, rootGridClass, contentGridClass, widgets, setChannelsOnLoad (optional),
+  #   onlyIfChannel (optional) — string or list; exact channel path or `prefix*` (same rules as forward.channelFilter).
+  #   When set, the page is skipped by prev/next nav until each pattern matches at least one live channel;
+  #   direct `/pageId` URLs still work.
+  pages:
+    - !include overview.yml
+    - !include instrumentCluster.yml
+    - !include izzeTTPMSMichelin.yml
+   # redundant, included in overview.yml
+   # - !include simpleTpms.yml
+   # Disabled internally, it's mostly debugging data which we should have in debug
+    - !include gps.yml
+   # temporarily disabled, internet not always available
+   # - !include weather.yml
+    - !include drag.yml
+    - !include avgSpeed.yml
+    - !include debug.yml

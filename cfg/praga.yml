@@ -1,0 +1,39 @@
+# Praga R1T EVO bench: instrument cluster, optional `/pragaExtras` (pressures / WG), BLE TPMS.
+# CONFIG=praga npm start
+drivers:
+  - name: Driver
+    pfp: ""
+
+lapTimer: {}
+
+# The Praga's bus runs at 1 Mbit/s; either car port works (see canBuses in cfg/main.yml).
+canBuses:
+  can0: 1000000
+
+channelAliases: !include channelAliases.yml
+mathChannels: !include mathChannels.yml
+
+ui:
+  channelSources:
+    - key: praga
+      file: Praga_R1T_EVO_OmegaCAN.dbc
+      bus: can0
+    - key: aim
+      file: aim/AiM_CAN_Output_custom.dbc
+      bus: can0
+    - key: chineseBLETPMS
+      bus: bluetooth-ble
+      forward:
+        toBus: can0
+        channelFilter: "chineseBLETPMS.*"
+        outputFormatDbc: BLE_TPMS_forward.dbc
+      mapping:
+        - LF: "5BF82B"
+        - RF: "5B9218"
+        - LR: "5BA609"
+  globalLayout:
+    rootGridClass: "max-md:grid-cols-1"
+  pages:
+    - !include instrumentCluster.yml
+    - !include pragaExtras.yml
+    - !include simpleTpms.yml

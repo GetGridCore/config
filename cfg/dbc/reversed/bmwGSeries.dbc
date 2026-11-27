@@ -1,0 +1,132 @@
+VERSION ""
+
+CM_ "BMW F/G Series PT-CAN (500 kbit/s) — RaceChrono community CSV + G29/J29 map (thesecretingredient.neocities.org/bmw/can/g29/).";
+CM_ "Signals marked unconfirmed in the source CSV are included only when bit layout was specified; scaling follows RaceChrono formulas where they differ from CSV byte columns.";
+CM_ "0x0D9 pedal/throttle: start bits follow RaceChrono bitsToUintLe (16, 12) and (32, 12), not the CSV start-byte columns.";
+CM_ "0x254 wheel speeds: G29 uses km/h with factor 1/64 (same as 0.015625); CSV label 'rad/s' is treated as km/h here.";
+CM_ "0x330 on PT-CAN is fuel (used / lamp / range). Same ID 0x330 on E-series K-CAN is odometer — do not mix buses.";
+CM_ "——— K-CAN / body bus (100 kbit/s) — OEM TPMS is not on PT-CAN for F/G (forum: RDC via DSC/FEM, not seen on PT-CAN sniffs).";
+CM_ "K-CAN TPMS IDs below are E-series references (MorGuux KCAN notes, nberlette E90 DBC): 0x2B2 wheel pressures, 0x31C RDC status, 0x31D puncture status.";
+CM_ "Byte layout for 0x2B2 is UNVERIFIED on F/G — guessed 8-bit * 0.025 bar per corner (McLaren-style). Capture K-CAN on your car before trusting.";
+CM_ "Oil pressure: no public CAN decode found for F/G PT-CAN; use OBD2/UDS (e.g. genericDiag) instead.";
+
+BU_: BMW
+
+BO_ 165 DME_EngineData_0A5: 8 BMW
+ SG_ EngineTorque_Nm : 16|12@1+ (0.5,-1023.5) [-1023.5|1023] "Nm" BMW
+ SG_ GearboxTorque_Nm : 28|12@1+ (0.5,-1023.5) [-1023.5|1023] "Nm" BMW
+ SG_ EngineRPM : 40|16@1+ (0.25,0) [0|16383.75] "rpm" BMW
+
+BO_ 217 PedalThrottle_0D9: 8 BMW
+ SG_ AcceleratorPedal_pct : 16|12@1+ (0.025,0) [0|100] "%" BMW
+ SG_ Throttle_pct : 32|12@1+ (0.025,0) [0|100] "%" BMW
+
+BO_ 239 BrakePressure_0EF: 8 BMW
+ SG_ Brake_Pressure_Front_bar : 16|16@1+ (0.4166666667,0) [0|250] "bar" BMW
+ SG_ Brake_Pct : 24|8@1+ (0.004,0) [0|100] "%" BMW
+ SG_ Brake_Pressure_Rear_bar : 40|16@1+ (0.4166666667,0) [0|250] "bar" BMW
+
+BO_ 243 Transmission_Gear_0F3: 8 BMW
+ SG_ Gear : 40|4@1+ (1,-4) [-4|11] "" BMW
+
+BO_ 371 ChassisFunctions_173: 8 BMW
+ SG_ FN_ABS : 28|12@1+ (1,0) [0|4095] "" BMW
+ SG_ FN_ASC : 40|12@1+ (1,0) [0|4095] "" BMW
+ SG_ Brake_State : 56|6@1+ (1,0) [0|63] "" BMW
+
+BO_ 409 LongitudinalAccel_199: 8 BMW
+ SG_ Inline_Accel : 16|16@1+ (0.002,-65) [-65|65] "m/s^2" BMW
+
+BO_ 410 LateralAccel_19A: 8 BMW
+ SG_ Lateral_Accel : 16|16@1+ (0.002,-65) [-65|65] "m/s^2" BMW
+
+BO_ 415 YawRate_19F: 8 BMW
+ SG_ Gyro_yawRate : 16|16@1+ (0.005,-163.84) [-163.84|163.83] "deg/s" BMW
+
+BO_ 417 VehicleSpeed_1A1: 8 BMW
+ SG_ Speed_kph : 16|16@1+ (0.015625,0) [0|350] "km/h" BMW
+
+BO_ 442 BatteryCurrent_1BA: 8 BMW
+ SG_ Current_IBS_A : 24|16@1+ (0.02,-200) [-200|1000] "A" BMW
+
+BO_ 494 HighBeam_1EE: 8 BMW
+ SG_ High_Beam_Lamp : 40|1@1+ (1,0) [0|1] "" BMW
+
+BO_ 502 TurnSignals_1F6: 8 BMW
+ SG_ Indicator_Left : 32|1@1+ (1,0) [0|1] "" BMW
+ SG_ Indicator_Right : 40|1@1+ (1,0) [0|1] "" BMW
+
+BO_ 596 WheelSpeeds_254: 8 BMW
+ SG_ Speed_RL_kph : 0|16@1+ (0.015625,-511.984) [-400|400] "km/h" BMW
+ SG_ Speed_RR_kph : 16|16@1+ (0.015625,-511.984) [-400|400] "km/h" BMW
+ SG_ Speed_FL_kph : 32|16@1+ (0.015625,-511.984) [-400|400] "km/h" BMW
+ SG_ Speed_FR_kph : 48|16@1+ (0.015625,-511.984) [-400|400] "km/h" BMW
+
+BO_ 641 BatteryVoltage_281: 8 BMW
+ SG_ Battery_mV : 0|12@1+ (15,0) [0|60000] "mV" BMW
+
+BO_ 708 FuelInjected_2C4: 8 BMW
+ SG_ Fuel_Raw_uL : 0|16@1+ (1,0) [0|65534] "uL" BMW
+
+BO_ 714 AmbientTemp_2CA: 8 BMW
+ SG_ Air_Temp_C : 8|8@1+ (0.5,-40) [-40|85] "degC" BMW
+
+BO_ 769 Steering_301: 8 BMW
+ SG_ Steering_deg : 16|16@1+ (0.04395,-1440.11) [-1440.11|1440.11] "deg" BMW
+
+BO_ 816 FuelStatus_330: 8 BMW
+ SG_ Fuel_Used_L : 32|8@1+ (1,0) [0|255] "L" BMW
+ SG_ Fuel_Indicator_Lamp : 40|1@1+ (1,0) [0|1] "" BMW
+ SG_ Fuel_Range_km : 48|12@1+ (0.0625,0) [0|255] "km" BMW
+
+BO_ 900 BrakePedal_384: 8 BMW
+ SG_ Brake_Pedal : 24|4@1+ (1,0) [0|15] "" BMW
+
+BO_ 922 GearboxTemp_39A: 8 BMW
+ SG_ Gear_Temp_C : 8|8@1+ (1,-40) [-40|170] "degC" BMW
+
+BO_ 1017 EngineTempsGear_3F9: 8 BMW
+ SG_ Water_Temp_C : 32|8@1- (1,-48) [-48|144] "degC" BMW
+ SG_ Oil_Temp_C : 40|8@1- (1,-48) [-48|170] "degC" BMW
+ SG_ Maximum_RPM : 56|8@1+ (1,50) [50|305] "rpm" BMW
+ SG_ Gear_3F9 : 48|4@1+ (1,-4) [-4|11] "" BMW
+
+BO_ 1019 AmbientPressure_3FB: 8 BMW
+ SG_ Air_Press_mbar : 0|8@1+ (2,598) [600|1106] "mbar" BMW
+
+BO_ 1021 GearboxShiftSpeed_3FD: 8 BMW
+ SG_ Gearbox_Shift_Speed : 32|4@1+ (1,0) [0|15] "" BMW
+
+BO_ 690 TPMS_WheelPressures_2B2_KCAN: 8 BMW
+ SG_ pTireFL_bar : 0|8@1+ (0.025,0) [0|6.375] "bar" BMW
+ SG_ pTireFR_bar : 8|8@1+ (0.025,0) [0|6.375] "bar" BMW
+ SG_ pTireRL_bar : 16|8@1+ (0.025,0) [0|6.375] "bar" BMW
+ SG_ pTireRR_bar : 24|8@1+ (0.025,0) [0|6.375] "bar" BMW
+
+BO_ 796 RDC_TyrePressureStatus_31C_KCAN: 8 BMW
+
+BO_ 797 DSC_PunctureStatus_31D_KCAN: 8 BMW
+
+CM_ SG_ 243 Gear "ZF8 gear: physical = raw nibble - 4 (P=0, R=-2, N=-3, 1..8).";
+CM_ SG_ 239 Brake_Pressure_Front_bar "G29 map: byte offset 2, 16-bit, *200/480 bar. Unconfirmed on all F/G variants.";
+CM_ SG_ 239 Brake_Pressure_Rear_bar "G29 map: byte offset 5, 16-bit, *200/480 bar.";
+CM_ SG_ 239 Brake_Pct "G29 map: byte offset 3, /250.";
+CM_ SG_ 816 Fuel_Used_L "G29 map: byte offset 4, liters.";
+CM_ SG_ 816 Fuel_Range_km "G29 map: bit offset 48, 12-bit, /16.";
+CM_ SG_ 1017 Maximum_RPM "G29 map: byte offset 7, +50 rpm offset.";
+CM_ SG_ 371 FN_ABS "Unconfirmed — table values unknown in source.";
+CM_ SG_ 371 FN_ASC "Unconfirmed — ASC / traction table values unknown.";
+CM_ SG_ 371 Brake_State "Unconfirmed — brake application state table unknown.";
+CM_ SG_ 442 Current_IBS_A "Unconfirmed — battery current (+ discharge).";
+CM_ SG_ 708 Fuel_Raw_uL "Unconfirmed — injected fuel amount.";
+CM_ SG_ 900 Brake_Pedal "Unconfirmed — on=0x9 off=0x1 contact.";
+CM_ SG_ 922 Gear_Temp_C "Unconfirmed — ZF8 oil temperature.";
+CM_ SG_ 1019 Air_Press_mbar "Unconfirmed — ambient pressure.";
+CM_ SG_ 1021 Gearbox_Shift_Speed "PARK=0, S1=1, S2=2, S3=3.";
+CM_ BO_ 690 "E90 K-CAN 0x2B2 'Wheel presses' (DSC). Guessed 8-bit * 0.025 bar per corner — validate on K-CAN capture.";
+CM_ BO_ 796 "E90 K-CAN 0x31C 'Tyre Pressure Status' (RDC). No public byte layout; frame reserved for discovery.";
+CM_ BO_ 797 "E90 K-CAN 0x31D 'Puncture Indicator Status' (DSC). No public byte layout; frame reserved for discovery.";
+
+VAL_ 243 Gear -4 "Unknown" -1 "Unknown2" 0 "P" -2 "R" -3 "N" 1 "1" 2 "2" 3 "3" 4 "4" 5 "5" 6 "6" 7 "7" 8 "8" ;
+VAL_ 1017 Gear_3F9 -4 "Unknown" -1 "Unknown2" 0 "P" -2 "R" -3 "N" 1 "1" 2 "2" 3 "3" 4 "4" 5 "5" 6 "6" 7 "7" 8 "8" ;
+VAL_ 1021 Gearbox_Shift_Speed 0 "PARK" 1 "S1" 2 "S2" 3 "S3" ;

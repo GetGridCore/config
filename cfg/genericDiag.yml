@@ -1,0 +1,158 @@
+# Generic OBD-II / UDS channel source over Bluetooth (Vgate vLinker MC+).
+# Connected via `bus: can-bluetooth` — see ui.channelSources comment block in main.yml.
+# Standard SAE J1979 Mode 01 PIDs on the OBD-II port (DME typically 0x7E0 → 0x7E8).
+# Originally set up for a BMW G87 M2; nothing in the active config is BMW-specific — BMW UDS DIDs are commented below.
+#
+# Linux/Pi only: if BLE TPMS / RaceBox are also configured, launch the app with BOTH `NOBLE_MULTI_ROLE=1`
+# (lets the radio keep scanning while connected to the dongle) AND `NOBLE_REPORT_ALL_HCI_EVENTS=1` (surfaces
+# every advertisement immediately instead of waiting for a second sighting — needed for sparse TPMS broadcasts
+# to come through reliably in motion). Without either, the vLinker connection silently starves TPMS / RaceBox
+# updates. No effect on macOS.
+key: genericDiag
+bus: can-bluetooth
+# Pin the specific vLinker MC+ dongle paired with this car. When this id is in range it wins over any other
+# matching dongle. Any other vLinker is still accepted as a fallback if this id is absent (~8 s grace at startup).
+#
+# IMPORTANT: BLE peripheral ids are platform-specific — the same physical dongle reports a different id depending
+# on what's running the app:
+#   • macOS — opaque CoreBluetooth UUID (32 hex chars, e.g. `c4ebf42693e7e4c440bc56d47ac9a9a6`). Apple hides the
+#     real BLE MAC from apps; this UUID is host-specific too, so the same dongle has a different UUID on a
+#     different Mac.
+#   • Linux / Raspberry Pi — the actual BLE MAC of the dongle (12 hex chars, e.g. `aabbccddeeff`; often printed
+#     on the dongle's label, also visible in the `[ELM327-BLE] locking on dongle id=<...>` log line on first run).
+# List both if the same config is used cross-platform; the matching id wins on each host. Strings are normalised
+# (lowercased, non-alphanumerics stripped) so dashes / colons are accepted but optional.
+preferredId:
+  - c4ebf42693e7e4c440bc56d47ac9a9a6   # macOS (CoreBluetooth UUID)
+  - c04846eabfd2                      # Linux/Pi (BLE MAC) — uncomment and set once you've read it from the log
+# Standard SAE J1979 PIDs — these are the safe set and cover racetrack basics
+# (engine speed/load, all the temps, MAP, throttle, fuel trims, lambda, voltage).
+fromObd2:
+  - engineRpm
+  - vehicleSpeed
+  - coolantTemp
+  - intakeAirTemp
+  - ambientAirTemp
+  - intakeMap
+  - acceleratorPedalPositionD
+  #- engineLoad
+  - engineOilTemp
+  - controlModuleVoltage
+  - fuelLevel
+  - longTermFuelTrimBank1
+  #- longTermFuelTrimBank2
+  - timingAdvance
+  #- runtimeSinceEngineStart
+# not needed
+#  - commandedEquivalenceRatio
+#  - throttlePosition
+# Adapter is request/response only — the dongle sits at the ELM prompt between requests. `onlyIfBusNotSilent`
+# works because the adapter seeds its "last RX" timestamp on init complete and every successful OBD response
+# refreshes it; once the car is off and replies stop, the gate closes again. The 5 s window covers a slow BLE link.
+#onlyIfBusNotSilent: true
+#onlyIfBusNotSilentWithinMs: 5000
+# Idle between full queue passes (ms). Each pass over ~17 PIDs takes ~5–8 s on a vLinker MC+, so a small inter-pass
+# wait keeps the dongle from being saturated back-to-back. The OBD2 runtime also auto-reclaims some of this when
+# a pass runs long.
+waitBetweenPolls: 200
+
+# --- BMW G87 (S58) manufacturer UDS channels over extended addressing -------------------------------------------
+# Tester 0x6F1 → DME (target byte 0x12), reply on 0x612. extendedAddressByte switches each DID to that scheme and
+# auto-widens the dongle's receive filter so 0x6xx replies come through. These two are STARTING POINTS: the DIDs and
+# scaling are community-cited for B58/S58, NOT confirmed for this exact DME software. They're chosen so you can
+# validate the new pipeline immediately — both have a standard-PID counterpart above to cross-check against:
+#   genericDiag.uds.oilTempC            vs  genericDiag.engineOilTemp  (PID 0x5C)
+#   genericDiag.uds.chargeAirPressureMbar vs genericDiag.intakeMap     (PID 0x0B, kPa)
+# Watch them on the debug page; if a value is wrong, set UDS_DEBUG_MULTIFRAME_RESPONSES=1 to log the raw PDU and
+# adjust did/dataBits/multiplier/addAfter. If a read times out, see the P3 notes in the BMW DID example below.
+#
+# Extended addressing is VERIFIED on the car (DME replied on 0x612 with `7F 22 31` = NRC requestOutOfRange). The DIDs
+# below are still PLACEHOLDERS (wrong → NRC/timeout) until real S58 DIDs are set — but a wrong/slow DID no longer
+# tanks the loop: UDS reads now get the same skip/cooloff as Mode 01 PIDs, so a missing DID backs off to an
+# occasional retry instead of burning its 4 s timeout every pass. Replace the DIDs with confirmed S58 values.
+# UDS via BMW extended addressing (tester 0x6F1 → DME 0x12, reply 0x612).
+# DISABLED: re-enabling this (even with a NARROW per-request ATCRA filter, not the accept-all flood) put the iOS
+# vLinker into a connect→drop loop while stationary in diag mode — confirms the 0x6F1/UDS path itself destabilises
+# this dongle. Mode 01 baseline is stable at ~230ms with this off. Don't re-enable on this dongle without first
+# isolating whether it's the ATCRA command or the 0x6F1 frames (deliberate experiment), and ideally real S58 DIDs.
+#customUDSChannels:
+#  - name: oilTempC
+#    extendedAddressByte: 0x12
+#    did: 0xD90C
+#    dataBits: 8
+#    multiplier: 1
+#    addBefore: 0
+#    addAfter: -48
+#  - name: chargeAirPressureMbar
+#    extendedAddressByte: 0x12
+#    did: 0xD904
+#    dataBits: 16
+#    multiplier: 1
+#    addBefore: 0
+#    addAfter: 0
+#  - name: oilPressureBar
+#    extendedAddressByte: 0x12
+#    did: 0xD905
+#    dataBits: 16
+#    multiplier: 0.001
+#    addBefore: 0
+#    addAfter: 0
+
+# Auto-defaulted to 800 ms for `bus: can-bluetooth` (vs 200 ms on wired CAN). Override here if you find a specific
+# ECU on this car needs longer; raise in 200 ms increments and watch the `[OBD2]` poll failure log line.
+# responseTimeoutMs: 800
+# Mode 01 multi-PID batching: SAE J1979 lets one request carry up to 6 PIDs and the ECU answers with all values
+# packed into one ISO-TP PDU (single- or multi-frame). Auto-defaulted to 6 for `bus: can-bluetooth` (cuts a 17-PID
+# pass from ~17 BLE round-trips to ~3). Set to 1 to disable batching if you ever see the ECU reject multi-PID
+# requests with `7F 01 ...` in the OBD2 log (rare on modern DMEs — many support the full 6).
+# obdMode01BatchSize: 6
+# Heavy diagnostics (UDS extended session + DTC reads + UDS DID polling) are disabled for now —
+# the Mode 01 PID queue above runs alone. To re-enable later, uncomment the blocks below; everything
+# else (BLE-aware UDS session timeout, extended-session renewal, etc.) is already in place.
+#
+# extendedSession is required before any UDS read (custom DID or UDS DTC). Harmless on the DME when
+# only OBD2 PIDs are polled, but unused traffic, so omit it while the heavy loop is off.
+# extendedSession: [0x7E0]
+#
+# customUDSChannels: per-DID UDS 0x22 reads. OEM DME UDS DIDs are not standardised; the entries below
+# are BMW B58 / S58 starting points (verify on the actual car — values appear as genericDiag.uds.<name>
+# in the debug page).
+# customUDSChannels:
+#   - name: oilTempC
+#     did: 0xD90C
+#     dataBits: 8
+#     multiplier: 1
+#     addBefore: 0
+#     addAfter: -48
+#   - name: chargeAirPressureMbar
+#     did: 0xD904
+#     dataBits: 16
+#     multiplier: 1
+#     addBefore: 0
+#     addAfter: 0
+#
+# BMW extended-addressing (F/G-series) UDS read. Most G-chassis manufacturer DIDs are NOT reachable via the
+# standard 0x7E0 endpoint above — BMW uses tester id 0x6F1 with the target ECU in the first data byte and replies
+# on 0x600+ecu. Set `extendedAddressByte` to switch this DID to that scheme: request goes out on 0x6F1 (override
+# with `toAddress`), reply read from 0x600+byte (override with `fromAddress`). The dongle's receive filter is
+# auto-widened so 0x6xx replies come through. NEEDS ON-CAR VALIDATION: a security gateway may refuse, the DID may
+# require a diagnostic session (not yet sent for this path), and multi-frame replies over BLE rely on the dongle's
+# auto flow control. 0x12 = DME below is illustrative; confirm the ECU byte/DID on the car.
+#   - name: dmeOilTempC
+#     extendedAddressByte: 0x12   # target ECU (DME). reply expected on 0x612
+#     did: 0xD90C
+#     dataBits: 8
+#     multiplier: 1
+#     addBefore: 0
+#     addAfter: -48
+#
+# readDTCs enables both the Mode 03 snapshot (fast queue) and the heavy DTC pass (UDS 0x19 when
+# readDTCFromUDS is set). DME is on 0x7E0 → 0x7E8.
+# readDTCs:
+#   moduleIds: [0x7E0]
+#   readDTCFromUDS: true
+#
+# heavyOperationsDebounceMs only matters when the heavy loop runs (readDTCs).
+# heavyOperationsDebounceMs: 30000
+#
+# Clearing codes is Settings → Vehicle diagnostics (off by default) — on a road car you typically don't.

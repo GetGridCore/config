@@ -1,0 +1,14 @@
+id: drag
+# Row 1 is a leading `auto` row for the warning banner; it collapses to nothing until a rule trips
+# (see cfg/warnings.yml). The drag meter fills row 2.
+contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-12 grid-rows-[auto_minmax(0,1fr)] gap-[clamp(10px,2.2vw,24px)] max-md:col-span-1 max-md:grid-cols-1 max-md:grid-rows-[auto_minmax(0,1fr)]"
+widgets:
+  - !include warnings.yml
+  - id: drag-meter-main
+    widget: dragMeter
+    gridClass: "col-start-1 col-span-12 row-start-2 min-h-[min(76vh,760px)] min-w-0 max-md:col-span-1"
+    params:
+      title: Drag
+      speedChannel: gpsSpeedKph
+      latChannel: gpsLat
+      lonChannel: gpsLon

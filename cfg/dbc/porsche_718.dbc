@@ -1,0 +1,125 @@
+VERSION ""
+
+CM_ "Porsche 718 (982) Cayman/Boxster — Drive CAN (CANDRIVE) @ 500 kbit/s; tap at gateway footwell (not OBD port).";
+CM_ "Proven on-car: planetkris.com + 718forum RaceChrono cross-check vs OBD (2023–2024).";
+CM_ "VW platform overlap: opendbc vw_mlb.dbc / vw_mqb.dbc share many 11-bit IDs with identical bit layouts on Drive CAN.";
+CM_ "Message names ending in __UNSURE: not verified on a 718 in this repo — inferred from VW DBC overlap or unpublished community notes.";
+CM_ "TPMS is not on Drive CAN (planetkris confirmed). OEM pressures need CANMEDIA/MMI bus tap; see TPMS_MMI__UNSURE.";
+
+BU_: 718
+
+BO_ 134 Steering: 8 718
+ SG_ LWI_Steering_angle : 16|13@1+ (0.1,0) [0|800] "Unit_DegreOfArc" 718
+ SG_ LWI_Steering_Speed : 31|9@1+ (5,0) [0|2500] "Unit_DegreOfArcPerSecon" 718
+
+BO_ 129 Motor_02: 8 718
+ SG_ Manual_Gear : 49|4@1+ (1,0) [0|15] "" 718
+
+CM_ BO_ 129 "Manual transmission gear on Drive CAN (planetkris): 0=stopped, 1–6=forward, 13=reverse, 14=not engaged.";
+CM_ SG_ 129 Manual_Gear "Same bit slice as vw_mlb MO_Gangposition (Motor_02). PDK cars use BO_ 258 instead.";
+
+BO_ 257 ESP_02: 8 718
+ SG_ ESP_Yaw_Rate : 40|14@1+ (0.01,0) [0|163.82] "Unit_DegreOfArcPerSecon" 718
+ SG_ ESP_Lateral_accel : 16|8@1+ (0.01,-1.27) [-1.27|1.27] "Unit_ForceOfGravi" 718
+ SG_ ESP_Longitudinal_adj : 24|10@1+ (0.03125,-16) [-16|15.90625] "Unit_MeterPerSeconSquar" 718
+
+BO_ 258 Getriebe_03: 8 718
+ SG_ PDK_Gear : 28|4@1+ (1,0) [0|15] "" 718
+ SG_ GE_Zielgang__UNSURE : 24|4@1+ (1,0) [0|15] "" 718
+ SG_ GE_Eingangsdrehz__UNSURE : 48|14@1+ (1,0) [0|16381] "rpm" 718
+
+CM_ BO_ 258 "PDK transmission gear on Drive CAN (planetkris + 718forum): 1–7=forward, 8=reverse.";
+CM_ SG_ 258 PDK_Gear "RaceChrono: bitsToUInt(raw,28,4). Verified on 718 PDK.";
+CM_ SG_ 258 GE_Zielgang__UNSURE "vw_mlb Getriebe_03 target gear at bit 24 — may differ from PDK_Gear slice on 718.";
+CM_ SG_ 258 GE_Eingangsdrehz__UNSURE "vw_mlb gearbox input shaft speed; useful with sump temp if present.";
+
+BO_ 259 ABS: 8 718
+ SG_ Wheel_Speed_FL : 16|12@1+ (0.103,0) [0|325.12] "Unit_KiloMeterPerHou" 718
+ SG_ Wheel_Speed_FR : 28|12@1+ (0.103,0) [0|325.12] "Unit_KiloMeterPerHou" 718
+ SG_ Wheel_Speed_RL : 40|12@1+ (0.103,0) [0|325.12] "Unit_KiloMeterPerHou" 718
+ SG_ Wheel_Speed_RR : 52|12@1+ (0.103,0) [0|325.12] "Unit_KiloMeterPerHou" 718
+
+BO_ 260 Transmission: 8 718
+ SG_ EPB_Clutch_Pedal : 32|8@1+ (0.4,-10) [8|92] "Unit_PerCent" 718
+
+BO_ 261 Throttle: 8 718
+ SG_ Throttle_Position : 48|8@1+ (0.4,0) [0|102] "Unit_PerCent" 718
+ SG_ Throttle_RPM : 16|16@1+ (0.25,0) [0|10000] "RPM" 718
+
+BO_ 262 Brakes: 8 718
+ SG_ Brake_PressureSig352 : 16|10@1+ (0.3,-30) [-30|276.6] "Unit_Bar" 718
+ SG_ Brake_Light : 26|1@1+ (1,1) [0|1] "On Off" 718
+
+BO_ 263 Motor: 8 718
+ SG_ MO_Istgang__UNSURE : 8|4@1+ (1,0) [0|15] "" 718
+ SG_ MO_Sollgang__UNSURE : 12|4@1+ (1,0) [0|15] "" 718
+ SG_ MO_Oil_Pressure : 16|8@1+ (0.04,0) [0|10] "Unit_Bar" 718
+ SG_ MO_Motor_Speed : 24|12@1+ (3,0) [0|12282] "Unit_MinutInver" 718
+ SG_ MO_Boost_Pressure : 39|9@1+ (0.01,0) [0|5.1] "Unit_Bar" 718
+
+CM_ SG_ 263 MO_Istgang__UNSURE "vw_mqb Motor_04 actual gear from engine ECU; complements BO_ 129/258 transmission gear.";
+CM_ SG_ 263 MO_Sollgang__UNSURE "vw_mqb Motor_04 target gear from engine ECU.";
+CM_ SG_ 263 MO_Boost_Pressure "Turbo manifold / charge-air boost (Ladedruck); same layout as vw_mqb MO_Ladedruck.";
+
+BO_ 276 Motor_10__UNSURE: 8 718
+ SG_ Intake_Manifold_Rel_Press_mbar : 25|6@1+ (18,0) [0|1116] "mbar" 718
+
+CM_ BO_ 276 "vw_mlb Motor_10 MO_rel_Saugrohrdruck — relative intake manifold pressure; charge-air related, complements boost bar on BO_ 263.";
+
+BO_ 779 Speed: 8 718
+ SG_ KBI_displayed_speed : 48|10@1+ (0.32,0) [0|325.12] "Unit_KiloMeterPerHour" 718
+
+BO_ 968 Getriebe_14__UNSURE: 8 718
+ SG_ GE_Sumpftemperatur : 56|8@1+ (1,-58) [-58|196] "degC" 718
+
+CM_ BO_ 968 "vw_mqb Getriebe_14 gearbox sump/oil temperature. Alternate ID if BO_ 1089 absent on bus.";
+
+BO_ 1089 Getriebe_04__UNSURE: 8 718
+ SG_ GE_Sumpftemperatur : 56|8@1+ (1,-58) [-58|196] "degC" 718
+ SG_ GE_Heizwunsch__UNSURE : 8|2@1+ (1,0) [0|3] "" 718
+
+CM_ BO_ 1089 "vw_mlb Getriebe_04 — primary candidate for PDK/MLB-style gearbox oil temp on VW-derived Porsche buses.";
+CM_ SG_ 1089 GE_Sumpftemperatur "Transmission sump temperature (Getriebeöltemperatur).";
+CM_ SG_ 1089 GE_Heizwunsch__UNSURE "Gearbox heat request flag (not a temperature).";
+
+BO_ 1600 Temps: 8 718
+ SG_ Intake_Temp : 8|8@1+ (0.75,-48) [-48|141.75] "Unit_DegreCelsi" 718
+ SG_ Oil : 16|8@1+ (1,-60) [-60|195] "Degrees C" 718
+ SG_ Coolant : 24|8@1+ (1,-75) [-75|180] "Degrees C" 718
+ SG_ MO_aktives_Getriebeheizen__UNSURE : 5|1@1+ (1,0) [0|1] "" 718
+ SG_ MO_Getriebe_kuehlen__UNSURE : 47|1@1+ (1,0) [0|1] "" 718
+
+CM_ SG_ 1600 Intake_Temp "Charge-air inlet / Ansaugluft temp (MO_Ansaugluft_Temp per vw_mqb Motor_07).";
+CM_ SG_ 1600 MO_aktives_Getriebeheizen__UNSURE "vw_mqb: active gearbox heating flag on Motor_07 frame.";
+CM_ SG_ 1600 MO_Getriebe_kuehlen__UNSURE "vw_mqb: gearbox cooling request flag on Motor_07 frame.";
+
+BO_ 1607 Motor_09__UNSURE: 8 718
+ SG_ Intercooler_Coolant_Temp : 0|8@1+ (0.75,-48) [-45.75|143.25] "degC" 718
+
+CM_ BO_ 1607 "vw_mlb Motor_09 MO_ITM_Kuehlmittel_Temp — intercooler/charge-air cooler loop coolant temperature (not post-turbo air temp).";
+
+BO_ 1651 TPMS_MMI__UNSURE: 8 718
+ SG_ pTireFL : 0|8@1+ (0.1,0) [0|25.5] "bar" 718
+ SG_ pTireFR : 8|8@1+ (0.1,0) [0|25.5] "bar" 718
+ SG_ pTireRL : 16|8@1+ (0.1,0) [0|25.5] "bar" 718
+ SG_ pTireRR : 24|8@1+ (0.1,0) [0|25.5] "bar" 718
+ SG_ TTireFL : 32|8@1+ (1,-40) [-40|215] "degC" 718
+ SG_ TTireFR : 40|8@1+ (1,-40) [-40|215] "degC" 718
+ SG_ TTireRL : 48|8@1+ (1,-40) [-40|215] "degC" 718
+ SG_ TTireRR : 56|8@1+ (1,-40) [-40|215] "degC" 718
+
+CM_ BO_ 1651 "CANMEDIA/MMI bus (not Drive CAN). planetkris decoded per-wheel TPMS but did not publish formulas; 718forum cites candidate ID 0x673 with 4+4 byte pressure/temp layout and ~0.1 bar scaling — verify on MMI bus before use.";
+CM_ SG_ 1651 pTireFL "Wheel order FL/FR/RL/RR is typical VW/Porsche but unconfirmed for 982.";
+
+BO_ 1714 Diagnose_01: 8 718
+ SG_ KBI_Odometer_K : 8|20@1+ (1,0) [0|1048573] "Unit_KiloMeter" 718
+ SG_ UH_Year : 28|7@1+ (1,2000) [2000|2127] "Unit_Year" 718
+ SG_ UH_Month : 35|4@1+ (1,0) [1|12] "Unit_Month" 718
+ SG_ UH_Day : 39|5@1+ (1,0) [1|31] "Unit_Day" 718
+ SG_ UH_Hour : 44|5@1+ (1,0) [0|23] "Unit_Hours" 718
+ SG_ UH_Minute : 49|6@1+ (1,0) [0|59] "Unit_Minut" 718
+ SG_ UH_Second : 55|6@1+ (1,0) [0|59] "Unit_Secon" 718
+
+BO_ 1719 Fuel: 8 718
+ SG_ KBI_Contents_Tank : 40|7@1+ (1,0) [0|125] "Unit_Liter" 718
+ SG_ KBI_Outside_Temp : 56|8@1+ (0.5,-50) [-50|75] "Unit_DegreCelsi" 718

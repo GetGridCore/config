@@ -1,0 +1,949 @@
+# Layout demo only — full config documentation is the header in cfg/main.yml.
+lapTimer: {}
+
+canBuses:
+  can0: 500000
+
+channelAliases:
+  gpsLat: system.gps.latitudeDeg, aim.AIM_GPSLatLon_6A3.GPSLatitude_deg, racebox.nav.latitudeDeg, system.WebGPS.latitudeDeg
+  gpsLon: system.gps.longitudeDeg, aim.AIM_GPSLatLon_6A3.GPSLongitude_deg, racebox.nav.longitudeDeg, system.WebGPS.longitudeDeg
+  gpsSpeedKph: system.gps.gpsSpeedKph, aim.AIM_GPSQuality_6A1.GPSSpeed_kph_x10, racebox.nav.gpsSpeedKph, system.WebGPS.gpsSpeedKph
+  gpsHorizontalAccuracyM: system.gps.horizontalAccuracyM, aim.AIM_GPSQuality_6A1.GPSPosAccuracy_m, racebox.nav.horizontalAccuracyM, system.WebGPS.horizontalAccuracyM
+  gpsSatellites: system.gps.satellites, aim.AIM_GPSQuality_6A1.GPSSatellites, racebox.nav.numSVs
+  gpsSampleTimeMs: system.gps.tsMs, aim.AIM_Time_6A0.RollingTime_ms, racebox.nav.tsMs
+
+ui:
+  channelSources:
+    - key: ttpms
+      file: official/IZZE_TTPMS.dbc
+      bus: can0
+    - key: mclarenlife
+      file: mclaren_720s.dbc
+      bus: can0
+    - key: aim
+      file: aim/AiM_CAN_Output_custom.dbc
+      bus: can0
+    - !include mclarenDiag.yml
+  globalLayout:
+    rootGridClass: "max-md:grid-cols-1"
+  pages:
+    # Control-bar status icons (GPS pin / modem-wifi-none / link text / battery) in every
+    # variant, straight from the shared statusIcons module the live ControlBar uses.
+    # Satellite map + sky view side by side, in the same 2:1 split the debug page uses. The map runs
+    # on preset coordinates because a demo has no GPS source; the sky view is fed a fixed sky string
+    # in the same format the GNSS runtime emits, so the plot is exercised without hardware.
+    - id: demoSatelliteAndSky
+      # 4 columns, 3:1 split — matches the real debug page (cfg/debug.yml), which uses `md:` rather
+      # than `lg:` for exactly this reason: kiosk CSS viewport width (Waveshare panels run at
+      # --force-device-scale-factor=1.3) never reaches the 1024px `lg:` breakpoint.
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-4 gap-4 max-md:col-span-1 max-md:grid-cols-1"
+      widgets:
+        - id: demo-satellite-preview
+          widget: satellitePreview
+          gridClass: "min-w-0 max-w-full overflow-clip col-span-3 max-md:col-span-1"
+          params:
+            title: Satellite
+            # Preset position (Sofia) — no channel binding, so the widget renders with no GPS source.
+            latValue: 42.69770
+            lonValue: 23.32190
+            zoom: 18
+            width: 640
+            height: 640
+            moveRefreshM: 45
+            requiresTapToActivate: false
+            provider: esri
+        - id: demo-sky-view
+          widget: skyView
+          gridClass: "min-w-0 col-span-1"
+          params:
+            title: Sky view
+            channel: demo.skyView
+            minCno: 20
+            showHeatmap: true
+            # A plausible Sofia sky, in the exact format the runtime emits: letter+SV, azimuth,
+            # elevation, C/N0, used. Weak birds (<20) render hollow, used ones carry a ring.
+            sampleSky: "G12:210:34:38:1;G24:145:62:41:1;G19:78:22:29:1;G13:300:48:36:1;G17:31:12:24:0;G25:255:71:39:1;G6:118:8:19:0;E7:150:55:35:1;E30:22:41:33:1;E8:190:28:31:1;E2:330:66:37:1;E25:95:15:22:0;B23:167:39:32:1;B25:243:52:34:1;B8:14:19:25:0;R3:288:44:30:1;R11:60:33:28:1;S36:172:31:29:0;Q1:205:9:17:0;G32:340:26:27:1"
+    - id: demoStatusIcons
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-1 gap-4 max-md:col-span-1"
+      widgets:
+        - id: status-icons-gallery
+          widget: statusIconsDemo
+          gridClass: ""
+          params:
+            title: "Status icons"
+    - id: demoLapDelta
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-2 gap-4 max-md:col-span-1 max-md:grid-cols-1"
+      widgets:
+        # Colors: green faster / red slower / white ~zero; unknown = static em dash.
+        - id: delta-faster
+          widget: textDataLapDelta
+          gridClass: ""
+          params:
+            title: "Lap Delta (Faster)"
+            channel: "=-0.284"
+            format: signedDelta
+            decimals: 3
+            labelPosition: bottom
+            displaySource: true
+        - id: delta-slower
+          widget: textDataLapDelta
+          gridClass: ""
+          params:
+            title: "Lap Delta (Slower)"
+            channel: "=+0.412"
+            format: signedDelta
+            decimals: 3
+            labelPosition: bottom
+            displaySource: true
+        - id: delta-zero
+          widget: textDataLapDelta
+          gridClass: ""
+          params:
+            title: "Lap Delta (Zero)"
+            channel: "=0.000"
+            format: signedDelta
+            decimals: 3
+            labelPosition: bottom
+            displaySource: true
+        - id: delta-unknown
+          widget: textDataLapDelta
+          gridClass: ""
+          params:
+            title: "Lap Delta (Unknown)"
+            channel: ""
+            value: "—"
+            format: signedDelta
+            decimals: 3
+            labelPosition: bottom
+        # Only when both channels set (distinct from single `channel` binding).
+        - id: delta-pred-minus-best
+          widget: textDataLapDelta
+          gridClass: ""
+          params:
+            title: "Lap Delta (Pred − Best)"
+            predictiveChannel: "=95.284"
+            bestChannel: "=95.000"
+            value: "0"
+            format: signedDelta
+            decimals: 3
+            labelPosition: bottom
+            displaySource: false
+
+    # lapDeltaBar (the big bar widget) in both normal and stopped states. All channels are forced with
+    # `=value` constants, so the demo needs no live data: `stopSpeedChannel` forces the raw speed test
+    # (`=50` = moving, `=0` = at rest) instead of the live system.motion.stopped verdict, and
+    # `lapCountChannel: "=N"` fakes the completed-lap count the `afterLap` mode checks.
+    - id: demoLapDeltaBar
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid min-h-0 min-w-0 grid-cols-2 gap-4 content-start max-md:col-span-1 max-md:grid-cols-1"
+      widgets:
+        - id: ldbar-faster
+          widget: lapDeltaBar
+          gridClass: "min-h-[min(38vh,280px)] min-w-0"
+          params:
+            title: "Lap Delta Bar (Faster · moving)"
+            channel: "=-0.284"
+            decimals: 3
+            unit: s
+            range: 1.5
+            stopSpeedChannel: "=50"
+        - id: ldbar-slower
+          widget: lapDeltaBar
+          gridClass: "min-h-[min(38vh,280px)] min-w-0"
+          params:
+            title: "Lap Delta Bar (Slower · moving)"
+            channel: "=+0.412"
+            decimals: 3
+            unit: s
+            range: 1.5
+            stopSpeedChannel: "=50"
+        - id: ldbar-stopped
+          widget: lapDeltaBar
+          gridClass: "min-h-[min(38vh,280px)] min-w-0"
+          params:
+            title: "Lap Delta Bar (Stopped)"
+            channel: "=-0.284"
+            stopSpeedChannel: "=0"
+            stoppedMode: always
+        - id: ldbar-armed-prelap
+          widget: lapDeltaBar
+          gridClass: "min-h-[min(38vh,280px)] min-w-0"
+          params:
+            # At rest but no lap completed yet → afterLap keeps the delta rolling (armed), not STOPPED.
+            title: "Lap Delta Bar (At rest, pre-lap → armed)"
+            channel: "=-0.050"
+            decimals: 3
+            unit: s
+            range: 1.5
+            stopSpeedChannel: "=0"
+            stoppedMode: afterLap
+            lapCountChannel: "=0"
+        - id: ldbar-afterlap-stopped
+          widget: lapDeltaBar
+          gridClass: "min-h-[min(38vh,280px)] min-w-0"
+          params:
+            # At rest after a completed lap → afterLap shows STOPPED.
+            title: "Lap Delta Bar (At rest, post-lap → STOPPED)"
+            channel: "=-0.050"
+            stopSpeedChannel: "=0"
+            stoppedMode: afterLap
+            lapCountChannel: "=2"
+
+    - id: demoMultiTire
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-2 gap-4 max-md:col-span-1 max-md:grid-cols-1"
+      # Pressure in mbar, battery in mV (DBC decoded units; widgets divide by 1000 to get bar/V).
+      # Temps in °C (decoded value as sent in snapshot).
+      setChannelsOnLoad:
+        # LF — near optimal
+        ttpms.LF_TTPMS_1.LF_TTPMS_P_GAUGE: 1950
+        ttpms.LF_TTPMS_1.LF_TTPMS_BAT_V: 3100
+        ttpms.LF_TTPMS_1.LF_TTPMS_SN: 11111
+        ttpms.LF_TTPMS_2.LF_TTPMS_T1: 68
+        ttpms.LF_TTPMS_2.LF_TTPMS_T2: 69
+        ttpms.LF_TTPMS_2.LF_TTPMS_T3: 70
+        ttpms.LF_TTPMS_2.LF_TTPMS_T4: 71
+        ttpms.LF_TTPMS_3.LF_TTPMS_T5: 72
+        ttpms.LF_TTPMS_3.LF_TTPMS_T6: 72
+        ttpms.LF_TTPMS_3.LF_TTPMS_T7: 73
+        ttpms.LF_TTPMS_3.LF_TTPMS_T8: 73
+        ttpms.LF_TTPMS_4.LF_TTPMS_T9: 74
+        ttpms.LF_TTPMS_4.LF_TTPMS_T10: 73
+        ttpms.LF_TTPMS_4.LF_TTPMS_T11: 72
+        ttpms.LF_TTPMS_4.LF_TTPMS_T12: 71
+        ttpms.LF_TTPMS_5.LF_TTPMS_T13: 70
+        ttpms.LF_TTPMS_5.LF_TTPMS_T14: 70
+        ttpms.LF_TTPMS_5.LF_TTPMS_T15: 69
+        ttpms.LF_TTPMS_5.LF_TTPMS_T16: 68
+        # RF — high pressure
+        ttpms.RF_TTPMS_1.RF_TTPMS_P_GAUGE: 2350
+        ttpms.RF_TTPMS_1.RF_TTPMS_BAT_V: 3050
+        ttpms.RF_TTPMS_1.RF_TTPMS_SN: 11112
+        ttpms.RF_TTPMS_2.RF_TTPMS_T1: 74
+        ttpms.RF_TTPMS_2.RF_TTPMS_T2: 76
+        ttpms.RF_TTPMS_2.RF_TTPMS_T3: 79
+        ttpms.RF_TTPMS_2.RF_TTPMS_T4: 81
+        ttpms.RF_TTPMS_3.RF_TTPMS_T5: 82
+        ttpms.RF_TTPMS_3.RF_TTPMS_T6: 84
+        ttpms.RF_TTPMS_3.RF_TTPMS_T7: 85
+        ttpms.RF_TTPMS_3.RF_TTPMS_T8: 86
+        ttpms.RF_TTPMS_4.RF_TTPMS_T9: 85
+        ttpms.RF_TTPMS_4.RF_TTPMS_T10: 84
+        ttpms.RF_TTPMS_4.RF_TTPMS_T11: 83
+        ttpms.RF_TTPMS_4.RF_TTPMS_T12: 82
+        ttpms.RF_TTPMS_5.RF_TTPMS_T13: 80
+        ttpms.RF_TTPMS_5.RF_TTPMS_T14: 79
+        ttpms.RF_TTPMS_5.RF_TTPMS_T15: 77
+        ttpms.RF_TTPMS_5.RF_TTPMS_T16: 75
+        # LR — low sensor battery
+        ttpms.LR_TTPMS_1.LR_TTPMS_P_GAUGE: 1920
+        ttpms.LR_TTPMS_1.LR_TTPMS_BAT_V: 2620
+        ttpms.LR_TTPMS_1.LR_TTPMS_SN: 11113
+        ttpms.LR_TTPMS_2.LR_TTPMS_T1: 72
+        ttpms.LR_TTPMS_2.LR_TTPMS_T2: 73
+        ttpms.LR_TTPMS_2.LR_TTPMS_T3: 75
+        ttpms.LR_TTPMS_2.LR_TTPMS_T4: 77
+        ttpms.LR_TTPMS_3.LR_TTPMS_T5: 79
+        ttpms.LR_TTPMS_3.LR_TTPMS_T6: 80
+        ttpms.LR_TTPMS_3.LR_TTPMS_T7: 81
+        ttpms.LR_TTPMS_3.LR_TTPMS_T8: 82
+        ttpms.LR_TTPMS_4.LR_TTPMS_T9: 82
+        ttpms.LR_TTPMS_4.LR_TTPMS_T10: 81
+        ttpms.LR_TTPMS_4.LR_TTPMS_T11: 80
+        ttpms.LR_TTPMS_4.LR_TTPMS_T12: 79
+        ttpms.LR_TTPMS_5.LR_TTPMS_T13: 77
+        ttpms.LR_TTPMS_5.LR_TTPMS_T14: 75
+        ttpms.LR_TTPMS_5.LR_TTPMS_T15: 74
+        ttpms.LR_TTPMS_5.LR_TTPMS_T16: 73
+        # RR — low pressure
+        ttpms.RR_TTPMS_1.RR_TTPMS_P_GAUGE: 1440
+        ttpms.RR_TTPMS_1.RR_TTPMS_BAT_V: 2980
+        ttpms.RR_TTPMS_1.RR_TTPMS_SN: 11114
+        ttpms.RR_TTPMS_2.RR_TTPMS_T1: 70
+        ttpms.RR_TTPMS_2.RR_TTPMS_T2: 71
+        ttpms.RR_TTPMS_2.RR_TTPMS_T3: 73
+        ttpms.RR_TTPMS_2.RR_TTPMS_T4: 75
+        ttpms.RR_TTPMS_3.RR_TTPMS_T5: 77
+        ttpms.RR_TTPMS_3.RR_TTPMS_T6: 78
+        ttpms.RR_TTPMS_3.RR_TTPMS_T7: 79
+        ttpms.RR_TTPMS_3.RR_TTPMS_T8: 80
+        ttpms.RR_TTPMS_4.RR_TTPMS_T9: 80
+        ttpms.RR_TTPMS_4.RR_TTPMS_T10: 79
+        ttpms.RR_TTPMS_4.RR_TTPMS_T11: 78
+        ttpms.RR_TTPMS_4.RR_TTPMS_T12: 77
+        ttpms.RR_TTPMS_5.RR_TTPMS_T13: 75
+        ttpms.RR_TTPMS_5.RR_TTPMS_T14: 74
+        ttpms.RR_TTPMS_5.RR_TTPMS_T15: 72
+        ttpms.RR_TTPMS_5.RR_TTPMS_T16: 71
+      widgets:
+        - id: mt-legend
+          widget: tpmsTempLegend
+          gridClass: "col-span-2 max-md:col-span-1"
+          params:
+            optimalTemp: 70
+            optimalTempRange: 20
+        - id: mt-ok
+          widget: ttpms
+          gridClass: ""
+          params:
+            corner: LF
+            displaySource: true
+            optimalTempRange: 15
+            optimalTemp: 70
+            additionalLabel: "Near optimal | opt=70C | range=15C"
+        - id: mt-high-p
+          widget: ttpms
+          gridClass: ""
+          params:
+            corner: RF
+            displaySource: true
+            optimalTempRange: 20
+            additionalLabel: "High pressure | opt=70C | range=20C"
+        - id: mt-low-batt
+          widget: ttpms
+          gridClass: ""
+          params:
+            corner: LR
+            displaySource: true
+            batteryWarnV: 2.8
+            alwaysShowSensorVoltage: true
+            additionalLabel: "Low sensor battery | opt=70C | range=20C"
+        - id: mt-low-p
+          widget: ttpms
+          gridClass: ""
+          params:
+            corner: RR
+            displaySource: true
+            optimalTempRange: 40
+            additionalLabel: "Low pressure | opt=70C | range=40C"
+
+    - id: demoSimpleTire
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-4 grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)] gap-4 max-md:col-span-1 max-md:grid-cols-2 max-md:grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]"
+      # Pressure in mbar, battery in mV (DBC decoded units; widgets divide by 1000 to get bar/V).
+      setChannelsOnLoad:
+        # LF — symmetric profile
+        ttpms.LF_TTPMS_1.LF_TTPMS_P_GAUGE: 1740
+        ttpms.LF_TTPMS_1.LF_TTPMS_BAT_V: 3080
+        ttpms.LF_TTPMS_1.LF_TTPMS_SN: 12345
+        ttpms.LF_TTPMS_2.LF_TTPMS_T1: 65
+        ttpms.LF_TTPMS_2.LF_TTPMS_T2: 67
+        ttpms.LF_TTPMS_2.LF_TTPMS_T3: 70
+        ttpms.LF_TTPMS_2.LF_TTPMS_T4: 72
+        ttpms.LF_TTPMS_3.LF_TTPMS_T5: 74
+        ttpms.LF_TTPMS_3.LF_TTPMS_T6: 75
+        ttpms.LF_TTPMS_3.LF_TTPMS_T7: 76
+        ttpms.LF_TTPMS_3.LF_TTPMS_T8: 77
+        ttpms.LF_TTPMS_4.LF_TTPMS_T9: 77
+        ttpms.LF_TTPMS_4.LF_TTPMS_T10: 76
+        ttpms.LF_TTPMS_4.LF_TTPMS_T11: 75
+        ttpms.LF_TTPMS_4.LF_TTPMS_T12: 74
+        ttpms.LF_TTPMS_5.LF_TTPMS_T13: 72
+        ttpms.LF_TTPMS_5.LF_TTPMS_T14: 70
+        ttpms.LF_TTPMS_5.LF_TTPMS_T15: 68
+        ttpms.LF_TTPMS_5.LF_TTPMS_T16: 65
+        # RF — outer-edge hot
+        ttpms.RF_TTPMS_1.RF_TTPMS_P_GAUGE: 1760
+        ttpms.RF_TTPMS_1.RF_TTPMS_BAT_V: 3050
+        ttpms.RF_TTPMS_1.RF_TTPMS_SN: 12346
+        ttpms.RF_TTPMS_2.RF_TTPMS_T1: 68
+        ttpms.RF_TTPMS_2.RF_TTPMS_T2: 70
+        ttpms.RF_TTPMS_2.RF_TTPMS_T3: 73
+        ttpms.RF_TTPMS_2.RF_TTPMS_T4: 76
+        ttpms.RF_TTPMS_3.RF_TTPMS_T5: 79
+        ttpms.RF_TTPMS_3.RF_TTPMS_T6: 82
+        ttpms.RF_TTPMS_3.RF_TTPMS_T7: 86
+        ttpms.RF_TTPMS_3.RF_TTPMS_T8: 90
+        ttpms.RF_TTPMS_4.RF_TTPMS_T9: 93
+        ttpms.RF_TTPMS_4.RF_TTPMS_T10: 91
+        ttpms.RF_TTPMS_4.RF_TTPMS_T11: 88
+        ttpms.RF_TTPMS_4.RF_TTPMS_T12: 84
+        ttpms.RF_TTPMS_5.RF_TTPMS_T13: 80
+        ttpms.RF_TTPMS_5.RF_TTPMS_T14: 76
+        ttpms.RF_TTPMS_5.RF_TTPMS_T15: 73
+        ttpms.RF_TTPMS_5.RF_TTPMS_T16: 70
+        # LR — cold / blue
+        ttpms.LR_TTPMS_1.LR_TTPMS_P_GAUGE: 1790
+        ttpms.LR_TTPMS_1.LR_TTPMS_BAT_V: 3100
+        ttpms.LR_TTPMS_1.LR_TTPMS_SN: 12347
+        ttpms.LR_TTPMS_2.LR_TTPMS_T1: 42
+        ttpms.LR_TTPMS_2.LR_TTPMS_T2: 44
+        ttpms.LR_TTPMS_2.LR_TTPMS_T3: 46
+        ttpms.LR_TTPMS_2.LR_TTPMS_T4: 48
+        ttpms.LR_TTPMS_3.LR_TTPMS_T5: 50
+        ttpms.LR_TTPMS_3.LR_TTPMS_T6: 52
+        ttpms.LR_TTPMS_3.LR_TTPMS_T7: 54
+        ttpms.LR_TTPMS_3.LR_TTPMS_T8: 56
+        ttpms.LR_TTPMS_4.LR_TTPMS_T9: 57
+        ttpms.LR_TTPMS_4.LR_TTPMS_T10: 56
+        ttpms.LR_TTPMS_4.LR_TTPMS_T11: 54
+        ttpms.LR_TTPMS_4.LR_TTPMS_T12: 52
+        ttpms.LR_TTPMS_5.LR_TTPMS_T13: 50
+        ttpms.LR_TTPMS_5.LR_TTPMS_T14: 48
+        ttpms.LR_TTPMS_5.LR_TTPMS_T15: 46
+        ttpms.LR_TTPMS_5.LR_TTPMS_T16: 44
+        # RR — near optimal
+        ttpms.RR_TTPMS_1.RR_TTPMS_P_GAUGE: 1830
+        ttpms.RR_TTPMS_1.RR_TTPMS_BAT_V: 3070
+        ttpms.RR_TTPMS_1.RR_TTPMS_SN: 12348
+        ttpms.RR_TTPMS_2.RR_TTPMS_T1: 69
+        ttpms.RR_TTPMS_2.RR_TTPMS_T2: 71
+        ttpms.RR_TTPMS_2.RR_TTPMS_T3: 73
+        ttpms.RR_TTPMS_2.RR_TTPMS_T4: 74
+        ttpms.RR_TTPMS_3.RR_TTPMS_T5: 75
+        ttpms.RR_TTPMS_3.RR_TTPMS_T6: 76
+        ttpms.RR_TTPMS_3.RR_TTPMS_T7: 76
+        ttpms.RR_TTPMS_3.RR_TTPMS_T8: 77
+        ttpms.RR_TTPMS_4.RR_TTPMS_T9: 77
+        ttpms.RR_TTPMS_4.RR_TTPMS_T10: 76
+        ttpms.RR_TTPMS_4.RR_TTPMS_T11: 76
+        ttpms.RR_TTPMS_4.RR_TTPMS_T12: 75
+        ttpms.RR_TTPMS_5.RR_TTPMS_T13: 74
+        ttpms.RR_TTPMS_5.RR_TTPMS_T14: 73
+        ttpms.RR_TTPMS_5.RR_TTPMS_T15: 71
+        ttpms.RR_TTPMS_5.RR_TTPMS_T16: 69
+      widgets:
+        - id: st-legend
+          widget: tpmsTempLegend
+          gridClass: "col-span-4 max-md:col-span-2"
+          params: {}
+        - id: st-ok
+          widget: tire
+          gridClass: ""
+          params:
+            corner: OK
+            tempChannel: "=70.5"
+            pressureChannel: "=1.96"
+            batteryChannel: "=3.08"
+            displaySource: true
+        - id: st-high
+          widget: tire
+          gridClass: ""
+          params:
+            corner: HI P
+            tempChannel: "=88.2"
+            pressureChannel: "=2.32"
+            batteryChannel: "=3.01"
+            displaySource: true
+            optimalTempRange: 18
+            pressureBands:
+              - { min: 1.85, max: 2.10, color: "#22c55e" }
+              - { min: null, max: 1.85, color: "#3b82f6" }
+              - { min: 2.10, max: null, color: "#ef4444" }
+        - id: st-low
+          widget: tire
+          gridClass: ""
+          params:
+            corner: LO P
+            tempChannel: "=74.0"
+            pressureChannel: "=1.45"
+            batteryChannel: "=2.65"
+            batteryWarnV: 2.8
+            displaySource: true
+            optimalTempRange: 42
+        - id: st-waiting
+          widget: tire
+          gridClass: ""
+          params:
+            corner: WAIT
+            tempChannel: "=20"
+            pressureChannel: "=6.375"
+            batteryChannel: ""
+            displaySource: true
+            sentinelPressure: 6.375
+        # 16-channel (IZZE) demo tiles — values come from the page-level setChannelsOnLoad above.
+        - id: st-16-lf
+          widget: tire
+          gridClass: ""
+          params:
+            corner: LF
+            multiTempChannelPrefix: "ttpms"
+            optimalTemp: 70
+            optimalTempRange: 20
+            batteryWarnV: 2.8
+            pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+        - id: st-16-rf
+          widget: tire
+          gridClass: ""
+          params:
+            corner: RF
+            multiTempChannelPrefix: "ttpms"
+            optimalTemp: 70
+            optimalTempRange: 20
+            batteryWarnV: 2.8
+            pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+        - id: st-16-lr
+          widget: tire
+          gridClass: ""
+          params:
+            corner: LR
+            multiTempChannelPrefix: "ttpms"
+            optimalTemp: 70
+            optimalTempRange: 20
+            batteryWarnV: 2.8
+            pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+        - id: st-16-rr
+          widget: tire
+          gridClass: ""
+          params:
+            corner: RR
+            multiTempChannelPrefix: "ttpms"
+            optimalTemp: 70
+            optimalTempRange: 20
+            batteryWarnV: 2.8
+            pressureBands: !include fragments/pressureBandsMichelinTtpms.yml
+
+    - id: demoGMeter
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-2 gap-4 max-md:col-span-1 max-md:grid-cols-1"
+      widgets:
+        - id: gm-cruise
+          widget: gMeterWithInputs
+          gridClass: ""
+          params:
+            title: "Cruise"
+            showMaxEnvelope: true
+            resetMaxOnChangeOf: ""
+            dummyDataTimespan: 8
+            dummyData: [[0, 0.00, -0.08], [350, 0.03, 0.25], [700, 0.06, 1.42], [1000, 0.08, 1.85], [1500, -0.30, 1.62], [2100, -0.72, 1.28], [2900, -1.05, 0.92], [3800, -1.20, 0.56], [5000, -0.82, 0.24], [6800, -0.38, 0.05], [8600, 0.22, 0.12], [10600, 0.72, 0.42], [12400, 1.02, 0.78], [14200, 0.66, 0.48], [16000, 0.18, 0.14], [18000, 0.00, -0.08]]
+            throttleChannel: "=22"
+            brakeChannel: "=0"
+            steeringChannel: "=5"
+        - id: gm-trail-brake
+          widget: gMeterWithInputs
+          gridClass: ""
+          params:
+            title: "Trail Brake"
+            showMaxEnvelope: false
+            resetMaxOnChangeOf: ""
+            dummyDataTimespan: 12
+            dummyData: [[0, 0.00, -0.06], [250, 0.02, 0.18], [520, 0.04, 1.56], [760, 0.06, 1.98], [1150, -0.22, 1.82], [1700, -0.62, 1.55], [2500, -1.02, 1.20], [3400, -1.32, 0.82], [4500, -1.42, 0.46], [5800, -1.18, 0.24], [7400, -0.86, 0.10], [9300, -0.52, 0.08], [11300, -0.20, 0.14], [13300, 0.26, 0.28], [15100, 0.48, 0.22], [16000, 0.00, -0.06]]
+            throttleChannel: "=4"
+            brakeChannel: "=78"
+            steeringChannel: "=125"
+        - id: gm-power-exit
+          widget: gMeterWithInputs
+          gridClass: ""
+          params:
+            title: "Power Exit"
+            showMaxEnvelope: false
+            resetMaxOnChangeOf: ""
+            dummyDataTimespan: 12
+            dummyData: [[0, 0.00, -0.10], [320, 0.03, 0.20], [640, 0.05, 1.35], [940, 0.07, 1.72], [1320, -0.16, 1.54], [1900, -0.46, 1.22], [2700, -0.78, 0.90], [3800, -0.98, 0.58], [5200, -0.84, 0.30], [6900, -0.52, 0.14], [8900, -0.18, 0.12], [10800, 0.36, 0.26], [12400, 0.82, 0.58], [14000, 1.16, 0.92], [15600, 0.78, 0.60], [17000, 0.00, -0.10]]
+            throttleChannel: "=88"
+            brakeChannel: "=2"
+            steeringChannel: "=-96"
+        - id: gm-max-load
+          widget: gMeterWithInputs
+          gridClass: ""
+          params:
+            title: "Max Load"
+            showMaxEnvelope: true
+            resetMaxOnChangeOf: ""
+            dummyDataTimespan: 12
+            dummyData: [[0, 0.00, -0.14], [320, 0.04, 0.22], [700, 0.08, 1.62], [1020, 0.10, 2.00], [1450, -0.24, 1.88], [2100, -0.72, 1.58], [3000, -1.18, 1.26], [4200, -1.56, 0.88], [5600, -1.74, 0.52], [7300, -1.40, 0.28], [9300, -0.98, 0.14], [11500, -0.46, 0.12], [13600, 0.18, 0.22], [15400, 0.84, 0.56], [17000, 1.34, 0.98], [18600, 0.86, 0.64], [20000, 0.00, -0.14]]
+            throttleChannel: "=100"
+            brakeChannel: "=100"
+            steeringChannel: "=260"
+            maxG: 2
+
+    - id: demoRpm
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-2 gap-4 max-md:col-span-1 max-md:grid-cols-1"
+      widgets:
+        - { id: rpm-low, widget: rpmTach, gridClass: "", params: { title: "RPM low", channel: "=1800", maxRpm: 9000, redlineRpm: 8200 } }
+        - { id: rpm-mid, widget: rpmTach, gridClass: "", params: { title: "RPM mid", channel: "=4500", maxRpm: 9000, redlineRpm: 8200 } }
+        - { id: rpm-high, widget: rpmTach, gridClass: "", params: { title: "RPM high", channel: "=8100", maxRpm: 9000, redlineRpm: 8200 } }
+        - { id: rpm-null, widget: rpmTach, gridClass: "", params: { title: "RPM (no channel)", channel: "", maxRpm: 9000, redlineRpm: 8200 } }
+        - { id: rpm-flat-curve, widget: rpmTach, gridClass: "", params: { title: "RPM flat powerCurve", channel: "=4950", maxRpm: 9000, redlineRpm: 8200, powerCurve: flat } }
+
+    - id: demoRpmAndMaps
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-1 auto-rows-min content-start gap-4"
+      widgets:
+        # presenceChannel: "" — the demo has no live SimHub source, so the gate is disabled here.
+        - { id: ram-mid, widget: rpmAndMaps, gridClass: "", params: { presenceChannel: "", channel: "=6000", maxRpm: 8000, pills: [ { label: MAP, levelChannel: "=4" }, { label: TC, levelChannel: "=5" }, { label: ABS, levelChannel: "=3" } ] } }
+        - { id: ram-limiter, widget: rpmAndMaps, gridClass: "", params: { presenceChannel: "", channel: "=7900", maxRpm: 8000, pills: [ { label: MAP, levelChannel: "=4" } ] } }
+        - { id: ram-tc-active, widget: rpmAndMaps, gridClass: "", params: { presenceChannel: "", channel: "=5200", maxRpm: 8000, pills: [ { label: MAP, levelChannel: "=4" }, { label: TC, levelChannel: "=5", activeChannel: "=1" }, { label: ABS, levelChannel: "=3" } ] } }
+        - { id: ram-gated-hidden, widget: rpmAndMaps, gridClass: "", params: { channel: "=6000" } }
+
+    - id: demoCarSettingsBar
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-1 auto-rows-min content-start gap-4"
+      widgets:
+        # No car provides these yet, so the demo feeds `=` constants. With the default aliases
+        # (last row) there is nothing to show here and the bar renders nothing.
+        - { id: csb-all, widget: carSettingsBar, gridClass: "", params: { pills: [ { label: TC, levelChannel: "=3" }, { label: ABS, levelChannel: "=2" }, { label: MAP, levelChannel: "=1" }, { label: BB, levelChannel: "=56.5", unit: "%", decimals: 1 } ] } }
+        - { id: csb-tc-active, widget: carSettingsBar, gridClass: "", params: { pills: [ { label: TC, levelChannel: "=3", activeChannel: "=1" }, { label: ABS, levelChannel: "=2" }, { label: MAP, levelChannel: "=1" }, { label: BB, levelChannel: "=56.5", unit: "%", decimals: 1 } ] } }
+        - { id: csb-bias-only, widget: carSettingsBar, gridClass: "", params: { pills: [ { label: BB, levelChannel: "=58", unit: "%", decimals: 1 } ] } }
+        - { id: csb-default-aliases, widget: carSettingsBar, gridClass: "" }
+
+    - id: demoGear
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-2 gap-4 max-md:col-span-1 max-md:grid-cols-1"
+      widgets:
+        - id: gear-ok
+          widget: textDataGearMismatch
+          gridClass: ""
+          params:
+            title: "Gear Match"
+            targetChannel: "=4"
+            engagedChannel: "=4"
+            channel: "=4"
+            format: gear
+            emphasis: high
+            labelPosition: bottom
+            displaySource: true
+        - id: gear-mismatch
+          widget: textDataGearMismatch
+          gridClass: ""
+          params:
+            title: "Gear Mismatch"
+            targetChannel: "=5"
+            engagedChannel: "=4"
+            channel: "=4"
+            format: gear
+            emphasis: high
+            labelPosition: bottom
+            displaySource: true
+        # One of target/engaged null → amber; both null → white (see colorForGearMismatch).
+        - id: gear-partial-unknown
+          widget: textDataGearMismatch
+          gridClass: ""
+          params:
+            title: "Gear (target missing)"
+            targetChannel: ""
+            engagedChannel: "=4"
+            channel: "=4"
+            format: gear
+            emphasis: high
+            labelPosition: bottom
+
+    # textData formats + warnAbove / warnUnder / warnColor (same for textDataConditional); textDataGpsFix / AiM speed (bench: usually NO CAN / STALE).
+    - id: demoTextData
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-2 gap-4 max-md:col-span-1 max-md:grid-cols-1"
+      widgets:
+        - id: td-laptime
+          widget: textData
+          gridClass: ""
+          params:
+            title: "Lap time"
+            channel: "=95.284"
+            format: lapTime
+            unit: ""
+            decimals: 3
+            labelPosition: bottom
+        - id: td-laptime-zero-empty
+          widget: textData
+          gridClass: ""
+          params:
+            title: "Best lap (0 → em dash)"
+            channel: "=0"
+            format: lapTime
+            lapTimeEmptyIfZero: true
+            unit: ""
+            decimals: 3
+            labelPosition: bottom
+        - id: td-laptime-zero-shown
+          widget: textData
+          gridClass: ""
+          params:
+            title: "Rolling lap at 0s"
+            channel: "=0"
+            format: lapTime
+            lapTimeEmptyIfZero: false
+            unit: ""
+            decimals: 3
+            labelPosition: bottom
+        - id: td-gear-rewrite
+          widget: textDataConditional
+          gridClass: ""
+          params:
+            title: "Gear labels (conditional alias)"
+            channel: "=12"
+            format: gear
+            rewriteNumberAs:
+              "0": "N"
+              "12": "R"
+            emphasis: high
+            labelPosition: bottom
+        - id: td-static-empty
+          widget: textData
+          gridClass: ""
+          params:
+            title: "No channel (static)"
+            channel: ""
+            value: "—"
+            decimals: 1
+            labelPosition: bottom
+        - id: td-scale
+          widget: textData
+          gridClass: ""
+          params:
+            title: "channelValueScale ×100"
+            channel: "=1.234"
+            channelValueScale: 100
+            decimals: 2
+            unit: "%"
+            labelPosition: bottom
+        - id: td-warn-under-battery-low
+          widget: textData
+          gridClass: ""
+          params:
+            title: "Battery low (warnUnder 12.5 V)"
+            channel: "=12.1"
+            decimals: 1
+            unit: V
+            warnUnder: 12.5
+            warnColor: "#fb923c"
+            labelPosition: bottom
+        - id: td-warn-under-battery-ok
+          widget: textData
+          gridClass: ""
+          params:
+            title: "Battery OK (same warnUnder)"
+            channel: "=13.8"
+            decimals: 1
+            unit: V
+            warnUnder: 12.5
+            warnColor: "#fb923c"
+            labelPosition: bottom
+        - id: td-warn-above-temp-hot
+          widget: textData
+          gridClass: ""
+          params:
+            title: "Temp high (warnAbove 100 °C)"
+            channel: "=102"
+            decimals: 0
+            unit: °C
+            warnAbove: 100
+            warnColor: "#fb923c"
+            labelPosition: bottom
+        - id: td-warn-above-temp-ok
+          widget: textData
+          gridClass: ""
+          params:
+            title: "Temp OK (same warnAbove)"
+            channel: "=95"
+            decimals: 0
+            unit: °C
+            warnAbove: 100
+            warnColor: "#fb923c"
+            labelPosition: bottom
+        - id: gps-fix-line
+          widget: textDataGpsFix
+          gridClass: ""
+          params:
+            title: "GPS fix line (channelAliases)"
+            labelPosition: bottom
+            sourceStaleAfterMs: 3000
+        - id: gps-speed-alias
+          widget: textData
+          gridClass: ""
+          params:
+            title: "GPS speed (alias + recency)"
+            channel: gpsSpeedKph
+            recencyChannel: gpsSpeedKph
+            recencyThresholdS: 3
+            displaySource: true
+            unit: km/h
+            decimals: 1
+            labelPosition: bottom
+    - id: demoInputsChart
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-1 gap-4 max-md:col-span-1"
+      widgets:
+        - id: inputs-full
+          widget: inputsChart
+          gridClass: "w-full min-h-0"
+          params:
+            throttleChannel: "=88"
+            brakeChannel: "=12"
+            steeringChannel: "=45"
+            showSteeringWheel: true
+            demoAnimate: true
+            historySeconds: 8
+        - id: inputs-no-brake
+          widget: inputsChart
+          gridClass: "w-full min-h-0"
+          params:
+            throttleChannel: "=72"
+            steeringChannel: "=-60"
+            showSteeringWheel: true
+            demoAnimate: true
+            historySeconds: 8
+        - id: inputs-pedals-only
+          widget: inputsChart
+          gridClass: "w-full min-h-0"
+          params:
+            throttleChannel: "=100"
+            brakeChannel: "=65"
+            showSteeringWheel: false
+            demoAnimate: true
+            historySeconds: 8
+
+    - id: demoBarPedalMini
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid min-h-0 min-w-0 max-w-full grid-cols-2 auto-rows-min items-start content-start gap-4 overflow-x-hidden max-md:col-span-1 max-md:grid-cols-1"
+      widgets:
+        - id: bar-empty
+          widget: barGauge
+          gridClass: ""
+          params:
+            title: "Bar (no value)"
+            channel: ""
+            min: 0
+            max: 100
+            color: "#4a9eff"
+        - id: bar-mid
+          widget: barGauge
+          gridClass: ""
+          params:
+            title: "Bar in range"
+            channel: "=50"
+            min: 0
+            max: 100
+            color: "#22c55e"
+        - id: pedal-idle
+          widget: pedalBars
+          gridClass: ""
+          params:
+            throttleChannel: "=0"
+            brakeChannel: "=0"
+            min: 0
+            throttleMax: 100
+            brakeMax: 100
+        - id: pedal-trail-brake
+          widget: pedalBars
+          gridClass: ""
+          params:
+            throttleChannel: "=12"
+            brakeChannel: "=74"
+        - id: mini-metrics
+          widget: miniMetricsGrid
+          gridClass: "col-span-2 max-md:col-span-1"
+          params:
+            items:
+              - title: Temp under cap
+                channel: "=72"
+                unit: "°C"
+                decimals: 0
+                icon: thermo
+                warnAbove: 100
+                warnColor: "#fb923c"
+              - title: Temp over cap
+                channel: "=105"
+                unit: "°C"
+                decimals: 0
+                icon: coolant
+                warnAbove: 100
+                warnColor: "#fb923c"
+              - title: Battery low
+                channel: "=12.0"
+                unit: "V"
+                decimals: 1
+                icon: battery
+                warnUnder: 12.5
+                warnColor: "#fb923c"
+              - title: Battery OK
+                channel: "=13.2"
+                unit: "V"
+                decimals: 1
+                icon: battery
+                warnUnder: 12.5
+                warnColor: "#fb923c"
+              - title: Fuel
+                channel: "=68"
+                unit: "%"
+                decimals: 0
+                icon: fuel
+                type: bar
+                barColor: "#d97706"
+                warnUnder: 15
+                warnColor: "#ef4444"
+              - title: Fuel low
+                channel: "=8"
+                unit: "%"
+                decimals: 0
+                icon: fuel
+                type: bar
+                barColor: "#d97706"
+                warnUnder: 15
+                warnColor: "#ef4444"
+
+    - id: demoWeather
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid min-h-0 min-w-0 grid-cols-1 gap-3 content-start max-md:col-span-1"
+      widgets:
+        - id: weather-alias
+          widget: weatherForecast
+          gridClass: "w-full max-w-[min(100%,820px)] justify-self-center"
+          params:
+            title: "Forecast · live GPS"
+            latChannel: gpsLat
+            longChannel: gpsLon
+            hours: 10
+        - id: weather-spa-bench
+          widget: weatherForecast
+          gridClass: "w-full max-w-[min(100%,820px)] justify-self-center"
+          params:
+            title: "Forecast · bench"
+            latChannel: "=50.437"
+            longChannel: "=5.971"
+            hours: 10
+
+    - id: demoDebugChannels
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-1 max-md:col-span-1"
+      widgets:
+        - id: debug-channels
+          widget: debugChannelsTable
+          gridClass: "min-h-[min(50vh,420px)] min-w-0"
+          params: {}
+
+    # Warning banner demo. `setChannelsOnLoad` forces a few channels over-threshold (page-scoped — it
+    # does NOT leak to other pages) so banners are visibly active here. Shows all four severities/looks:
+    # built-in defaults (Undervoltage red, CPU Temp amber) + two user rules (Oil Temp High red, and the
+    # blue "cold" Coolant Temp Too Low), ordered by severity (desc) then config order, capped at
+    # maxBanners=4, pushing the grid content below them down.
+    - id: demoWarnings
+      # Row 1 (auto) holds the banner; row 2 (1fr) absorbs the leftover height so the banner row is
+      # NOT stretched to fill the page (otherwise the gap under the banner grows as banners clear).
+      contentGridClass: "col-span-2 row-start-1 row-span-1 grid h-full min-h-0 min-w-0 grid-cols-2 grid-rows-[auto_minmax(0,1fr)] gap-4 max-md:col-span-1 max-md:grid-cols-1"
+      setChannelsOnLoad:
+        system.hwPerf.underVoltageNow: 1
+        system.hwPerf.tempC: 88
+        demo.oilTempC: 145
+        demo.coolantTempC: 55
+        demo.dtcCount: 3
+      widgets:
+        - id: warn-demo
+          widget: warningBanner
+          gridClass: "col-span-full row-start-1 min-w-0"
+          params:
+            maxBanners: 4
+            keepDefaults: true
+            rules:
+              # DTC-style banner: greaterThan on a numeric count channel (setChannelsOnLoad only
+              # supports numbers; in real use wire to a text channel with `when: isSet, detail: "="`).
+              - channel: demo.dtcCount
+                when: greaterThan
+                threshold: 0
+                severity: 80
+                title: Active DTCs
+                detail: "ECM[P0420 Catalyst efficiency below threshold, P0300 Random/multiple misfire detected]; TCM[P1234 Gear ratio error 4th]"
+                color: "oklch(0.73 0.18 40)"
+              # User rule (tried first in config order; severity decides display order).
+              - channel: demo.oilTempC
+                when: greaterThan
+                threshold: 130
+                severity: 90
+                title: Oil Temp High
+                detail: Reduce load
+                unit: "°C"
+                color: "oklch(0.70 0.23 25)"
+              - channel: demo.coolantTempC
+                when: lowerThan
+                threshold: 70
+                severity: 5
+                title: Coolant Temp Too Low
+                detail: Warm engine before pushing
+                unit: "°C"
+                color: "oklch(0.55 0.20 255)"
+                darkText: false
+        - id: warn-demo-note
+          widget: textData
+          gridClass: "min-h-[min(40vh,320px)] min-w-0"
+          params:
+            title: Grid content (pushed down by banners)
+            value: "=4"
+            unit: " active"
+            labelPosition: bottom

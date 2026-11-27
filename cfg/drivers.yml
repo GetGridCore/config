@@ -1,0 +1,9 @@
+# Dashboard driver list: the names you pick from in the status bar. The chosen driver is saved with each session.
+# `pfp` (optional) is a link to a picture.
+# `bleBeacon` (optional) is the name of that driver's heart-rate strap: when the strap is in range,
+# the device selects the driver by itself.
+- name: Alex
+  pfp: "https://example.com/alex.jpg"
+  bleBeacon: "808S 0012345"
+- name: Sam
+- name: Guest
